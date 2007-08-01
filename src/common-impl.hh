@@ -1,14 +1,10 @@
 #ifndef COMMON_IMPL_HH
 #define COMMON_IMPL_HH
 
-#include <vector>
-#include <string>
-#include <fstream>
 #include <iterator>
-#include <map>
 #include <algorithm>
-#include <iostream>
-#include <stack>
+#include <ostream>
+#include <stdexcept>
 
 template<typename T>
 void 
@@ -28,11 +24,12 @@ create_binary_tree(NHNode *root, Binary_tree<T> &tree,
     create_binary_tree(root->children->next->node, tree, tree.right(ext));
 }
 
-template<typename T> 
-std::vector<typename Binary_tree<T>::vid_t>
+template<typename T>
+void
 create_gene_species_map(const Binary_tree<T> &species_tree, 
                         const Binary_tree<T> &gene_tree, 
-                        std::string map_filename)
+                        std::string map_filename,
+                        std::vector<typename Binary_tree<T>::vid_t> &sigma)
 {
     using namespace std;
     typedef typename Binary_tree<T>::vid_t vid_t;
@@ -46,7 +43,7 @@ create_gene_species_map(const Binary_tree<T> &species_tree,
     /* Make sure there are even number of strings in map file. */
     if (map_file_content.size() == 0 || map_file_content.size() % 2 != 0)
         {
-            throw Some_exception("error reading map file.");
+            throw logic_error("error reading map file.");
         } 
 
     /* Create a map from gene name to species name. */
@@ -55,7 +52,6 @@ create_gene_species_map(const Binary_tree<T> &species_tree,
         str_sigma[map_file_content[i]] = map_file_content[i+1];
     
     /* Create the final map called sigma mapping vid_t to vid_t */
-    vector<vid_t> sigma(gene_tree.size());
     for (vid_t v = 0; v <= gene_tree.last(); ++v)
         {
             if (!gene_tree.is_leaf(v))
@@ -68,7 +64,7 @@ create_gene_species_map(const Binary_tree<T> &species_tree,
                     string message = 
                         "gene label '" + gene_label + "' "
                         "is missing in map file.";
-                    throw Some_exception(message.c_str());
+                    throw logic_error(message);
                 }
             if (species_tree[species_label] == Binary_tree<T>::NONE)
                 {
@@ -76,12 +72,10 @@ create_gene_species_map(const Binary_tree<T> &species_tree,
                         "species label '" + species_label + "' "
                         "which occurs in map file "
                         "does not exist in species tree.";
-                    throw Some_exception(message.c_str());
+                    throw logic_error(message);
                 }
             sigma[v] = species_tree[species_label];
         }
-    
-    return sigma;
 }
 
 template<typename T>
@@ -102,6 +96,23 @@ output_subtree(std::ostream &out, const Binary_tree<T> &tree,
     out << ")" << subtree << "_" << tree.label(subtree);
 }
 
+template<typename T>
+void
+get_postorder_numbering(const Binary_tree<T> &tree,
+                        std::vector<typename Binary_tree<T>::vid_t> &numbering)
+{
+    typedef typename Binary_tree<T>::vid_t vid_t;
+    
+    unsigned i = 0;
+    for (vid_t u = tree.postorder_begin();
+         u != tree.NONE;
+         u = tree.postorder_next(u))
+        {
+            numbering[u] = i;
+
+            ++i;
+        }
+}
 
 
 template<typename T>

@@ -12,25 +12,9 @@
 extern "C" {
 #include <NHtypes.h>
 }
-#include <map>
 #include <string>
-#include <ostream>
-
-/*
- * Some_exception
- *
- * An exception class used for easily throwing new exceptions with a
- * meaningful string as the 'what' argument. This is instead of
- * defining a new exception type for each kind of exception we want to
- * throw. This might change in the future when the program is somewhat
- * more mature.
- */
-struct Some_exception : public std::exception {
-    const char *w_;
-    Some_exception(const char *w) : w_(w) {}
-    const char *what() const throw() {return w_;}
-};
-
+#include <iosfwd>
+#include <vector>
 
 /*
  * NHtree_is_binary()
@@ -60,17 +44,33 @@ void create_binary_tree(NHNode *root, Binary_tree<T> &tree,
 /*
  * create_gene_species_map()
  *
- * Given the name of the gene-to-species map-file (i.e., sigma), a
- * gene-to-species std::map is returned. It might be bettor to
- * implement this as taking a map and filling it rather than returning
- * the entire map.
+ * This function computes the mapping (sigma) between gene tree leaves
+ * and species tree leaves, and stores the result in 'sigma'. The size
+ * of 'sigma' must be at least gene_tree.size(). 
+ *
+ * May throw std::logic_error in case problems occur while reading the
+ * map file. The what() function will then return a meaningful
+ * description that can be output by the program to the user. This is
+ * more convenient at the moment than providing different error
+ * classes for each possible error.
  */
 template<typename T>
-std::vector<typename Binary_tree<T>::vid_t>
-create_gene_species_map(const Binary_tree<T> &species_tree, 
-                        const Binary_tree<T> &gene_tree, 
-                        std::string map_filename);
+void create_gene_species_map(const Binary_tree<T> &species_tree, 
+                             const Binary_tree<T> &gene_tree, 
+                             std::string map_filename,
+                             std::vector<typename Binary_tree<T>::vid_t> &sigma);
 
+/*
+ * get_postorder_numbering()
+ *
+ * Provides a postorder numbering of the vertices in 'tree'. The size
+ * of the vector 'numbering' must be at least 'tree.size()'. After a
+ * call to this function, numbering[v] is the postorder number of
+ * vertex v.
+ */
+template<typename T>
+void get_postorder_numbering(const Binary_tree<T> &tree,
+                             std::vector<typename Binary_tree<T>::vid_t> &numbering);
 
 /*
  * ostream << Binary_tree<T>

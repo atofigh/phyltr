@@ -8,12 +8,6 @@
  * algorithm is published. ] The program also backtracks to find all
  * optimal (i.e., most parsimonious) DTL-scenarios.
  *
- * TODO:
- *
- * - Change the output to something actually meaningful. Preferably
- * using XML.
- * - Implement a true C++ tree parser for reading the phylogenetic
- * trees.
  */
 
 #include "common.hh"
@@ -25,28 +19,31 @@ extern "C" {
 #include <boost/program_options.hpp>
 #include <boost/multi_array.hpp>
 #include <boost/dynamic_bitset.hpp>
+#include <boost/foreach.hpp>
+#include <boost/concept_check.hpp>
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
 #include <string>
 #include <cstdio>
+#include <cstdlib>
 #include <cerrno>
-#include <map>
-#include <list>
 #include <vector>
 #include <iterator>
 #include <fstream>
 #include <limits>
-#include <iterator>
 
-using namespace std;
-namespace po = boost::program_options;
-using boost::multi_array;
-using boost::dynamic_bitset;
+//============================================================================
+//             Namespace declarations and using directives.
+//============================================================================
 
-/*
- * Typedefs and class declarations
- */
+using namespace  std;
+using            boost::multi_array;
+using            boost::dynamic_bitset;
+
+//============================================================================
+//                   Typedefs and class declarations
+//============================================================================
 
 typedef Binary_tree<double> Tree_type;
 typedef Tree_type::vid_t    vid_t;
@@ -65,19 +62,16 @@ typedef float               Cost_type; // Instead of double to save memory.
  * in which only a subtree of the gene tree is being
  * considered.
  *
- * This class is a candidate for breaking out and making it a common
- * class to be used by programs in the PhylTr package. In that case,
- * we should probably hide the implementation and define a union
- * operation. For now, a Scenario is just a pair of bitsets.
  */
 struct Scenario {
     explicit Scenario(unsigned num_vertices);
-    Cost_type cost(Cost_type duplication_cost, Cost_type transfer_cost);
+    Cost_type cost() const;
 
     dynamic_bitset<> duplications;
     dynamic_bitset<> transfer_edges;
+    
+    bool operator<(const Scenario &sc) const;
 };
-
 
 /*
  * Class Below
@@ -111,7 +105,7 @@ struct Scenario {
  * in 'scenarios_below' and 'scenarios_at'. The vector
  * 'scenarios_below' contains all scenarios where u is mapped at or
  * below x, while 'scenarios_at' contains the scenarios in which
- * u is mapped to x only.
+ * u is mapped to exactly x.
  */
 struct Below {
     enum {S, S_REV, T_LEFT, T_RIGHT, D, B_LEFT, B_RIGHT, N_EVENTS};
@@ -125,7 +119,6 @@ struct Below {
     bool scenarios_below_computed;
     bool scenarios_at_computed;
 };
-
 
 /*
  * Class Outside
@@ -150,19 +143,45 @@ struct Outside {
 };
 
 /*
- * Global Constants
+ * struct Program_input
+ * 
+ * An object g_program_input of Program_input is used to hold input to
+ * the program and should be accessible by all source files.
  */
+struct Program_input {
+    Tree_type      species_tree;
+    Tree_type      gene_tree;
+    vector<vid_t>  sigma;
+    Cost_type      duplication_cost;
+    Cost_type      transfer_cost;
+    bool           cost_only;
 
-const string PROG_NAME = "phyltr";
+    Program_input() : species_tree(), gene_tree(), sigma(),
+                      duplication_cost(0), transfer_cost(0),
+                      cost_only(false)
+    {}
+};
+//============================================================================
+//                   Global Constants and variables.
+//============================================================================
+
+const string PROG_NAME = "phyltr-dp";
 const string USAGE = 
     "Usage: " + PROG_NAME + " [OPTION]... SPECIES_TREE_FILE GENE_TREE_FILE "
     "GENEMAP_FILE";
 const Cost_type COST_INF = numeric_limits<Cost_type>::infinity();
 
+Program_input g_program_input = Program_input();
 
-/*
- * Function declarations
- */ 
+/* Variable holding the command line options. */
+boost::program_options::variables_map g_program_options;
+/* The DP-algorithm matrices. */
+multi_array<Below, 2> g_below;
+multi_array<Outside, 2> g_outside;
+
+//=============================================================================
+//                        Function declarations
+//=============================================================================
 
 /*
  * backtrack_scenarios_below()
@@ -171,29 +190,33 @@ const Cost_type COST_INF = numeric_limits<Cost_type>::infinity();
  * the description of the Scenario class) most parsimonious partial
  * DTL-scenario (a Scenario object) such that 'gene_vertex' is placed
  * at or below 'species_vertex', and inserts them into
- * below[gene_vertex][species_vertex].scenarios_below.
+ * g_below[gene_vertex][species_vertex].scenarios_below.
  */
-void backtrack_scenarios_below(const Tree_type &spcies_tree,
-                               const Tree_type &gene_tree,
-                               const vector<vid_t> &sigma,
-                               multi_array<Below, 2> &below,
-                               const multi_array<Outside, 2> &outside,
-                               Cost_type duplication_cost,
-                               Cost_type transfer_cost,
-                               vid_t gene_vertex, 
+void backtrack_scenarios_below(vid_t gene_vertex, 
                                vid_t species_vertex);
+
+/*
+ * dp_algorithm()
+ *
+ * The function performing the dynamic programming algorithm. The
+ * result is stored in the global matrices 'g_below' and 'g_outside'.
+ */
+void dp_algorithm();
+
+//=============================================================================
+//         Template and inline function and member definitions.
+//=============================================================================
+
+
+
+//=============================================================================
+//                                main()
+//=============================================================================
 
 int
 main(int argc, char *argv[])
 {
-    /*
-     * Declaration of variables holding the options from the command line.aaaaa
-     */
-    double transfer_cost;
-    double duplication_cost;
-    string species_tree_filename;
-    string gene_tree_filename;
-    string map_filename;
+    namespace po = boost::program_options;
 
     /*
      * Parse the command line options.
@@ -201,62 +224,49 @@ main(int argc, char *argv[])
 
     /* Declare options that are described when --help is given. */
     po::options_description visible_opts("Command Line Options");
-    visible_opts.add_options()
-        ("help", "display this help and exit")
-        ("transfer-cost,t",
-         po::value<double>(&transfer_cost)->default_value(1.0),
-         "Cost of transfer events")
-        ("duplication-cost,d", 
-         po::value<double>(&duplication_cost)->default_value(1.0),
-         "Cost of duplication events")
-        ;
-
-    /* Declare positional options. */
     po::options_description hidden_opts("");
-    hidden_opts.add_options()
-        ("species_tree_file", po::value<string>(&species_tree_filename), "")
-        ("gene_tree_file", po::value<string>(&gene_tree_filename), "")
-        ("map_file", po::value<string>(&map_filename), "")
-        ;
-    
     po::options_description all_options("");
-    all_options.add(visible_opts).add(hidden_opts);
 
-    po::positional_options_description positional_options;
-    positional_options.add("species_tree_file", 1);
-    positional_options.add("gene_tree_file", 1);
-    positional_options.add("map_file", 1);
- 
-    /* Parse the arguments. */
-    po::variables_map vm;
     try
         {
-            po::store(po::command_line_parser(argc, argv).options(all_options)
-                      .positional(positional_options).run(), vm);
-            po::notify(vm);
+            visible_opts.add_options()
+                ("help", "display this help and exit")
+                ("transfer-cost,t",
+                 po::value<Cost_type>(&g_program_input.transfer_cost)
+                 ->default_value(1.0),
+                 "Cost of transfer events")
+                ("duplication-cost,d", 
+                 po::value<Cost_type>(&g_program_input.duplication_cost)
+                 ->default_value(1.0),
+                 "Cost of duplication events")
+                ("cost-only,c",
+                 po::bool_switch(&g_program_input.cost_only)
+                 ->default_value(false),
+                 "If set, only the optimum cost is printed")
+                ;
+            
+            /* Declare positional options. */
+            hidden_opts.add_options()
+                ("species-tree-file",po::value<string>())
+                ("gene-tree-file", po::value<string>())
+                ("map-file", po::value<string>())
+                ;
+            
+            po::positional_options_description positional_options;
+            positional_options.add("species-tree-file", 1);
+            positional_options.add("gene-tree-file", 1);
+            positional_options.add("map-file", 1);
 
-            /* Show help message if --help was given. */
-            if (vm.count("help"))
-                {
-                    cout << USAGE << '\n'
-                         << visible_opts << '\n';
-                    exit(EXIT_SUCCESS);
-                }
+            /* Gather all options into a single options_description. */
+            all_options.add(visible_opts).add(hidden_opts);
+            
+            /* Parse the arguments. */
+            po::command_line_parser parser(argc, argv);
+            parser.options(all_options);
+            parser.positional(positional_options);
+            po::store(parser.run(), g_program_options);
+            po::notify(g_program_options);
 
-            /* Check that all required positional arguments are given. */
-            struct Too_few_arguments : public exception {
-                const char *what() const throw() {
-                    return "too few arguments";
-                }
-            };
-
-            if (vm.count("species_tree_file") == 0 
-                || vm.count("gene_tree_file") == 0 
-                || vm.count("map_file") == 0)
-                {
-                    throw Too_few_arguments();
-                }
- 
         }
     catch (exception &e)
         {
@@ -265,11 +275,30 @@ main(int argc, char *argv[])
             exit(EXIT_FAILURE);
         }
 
+    /* Show help message if --help was given. */
+    if (g_program_options.count("help"))
+        {
+            cout << USAGE << '\n'
+                 << visible_opts << '\n';
+            exit(EXIT_SUCCESS);
+        }
+    
+    /* Check that all required positional arguments are given. */
+    if (g_program_options.count("species-tree-file") == 0 
+        || g_program_options.count("gene-tree-file") == 0 
+        || g_program_options.count("map-file") == 0)
+        {
+            cerr << PROG_NAME << ": Too few arguments.\n"
+                 << "Try '" << PROG_NAME << " --help' for more information.\n";
+            exit(EXIT_FAILURE);
+        }
+    
     /*
      * Read the species- and gene-tree files.
      */
-
     errno = 0;
+    string species_tree_filename =
+        g_program_options["species-tree-file"].as<string>();
     FILE *species_tree_file = fopen(species_tree_filename.c_str(), "r");
     if (errno)
         {
@@ -280,6 +309,8 @@ main(int argc, char *argv[])
             exit(EXIT_FAILURE);
         }
 
+    string gene_tree_filename =
+        g_program_options["gene-tree-file"].as<string>();
     FILE *gene_tree_file = fopen(gene_tree_filename.c_str(), "r");
     if (errno)
         {
@@ -323,12 +354,10 @@ main(int argc, char *argv[])
         }
 
     /* transform the NH-trees to Binary_trees. */
-    Tree_type species_tree;
-    Tree_type gene_tree;
     try
         {
-            create_binary_tree(NH_species_root, species_tree, 0);
-            create_binary_tree(NH_gene_root, gene_tree, 0);
+            create_binary_tree(NH_species_root, g_program_input.species_tree, 0);
+            create_binary_tree(NH_gene_root, g_program_input.gene_tree, 0);
         }
     catch (const exception &e)
         {
@@ -339,11 +368,13 @@ main(int argc, char *argv[])
     /*
      * Read map file
      */
-    
-    vector<vid_t> sigma;
+    g_program_input.sigma.resize(g_program_input.gene_tree.size());
     try 
         {
-            sigma = create_gene_species_map(species_tree, gene_tree, map_filename);
+            create_gene_species_map(g_program_input.species_tree,
+                                    g_program_input.gene_tree,
+                                    g_program_options["map-file"].as<string>(),
+                                    g_program_input.sigma);
         }
     catch (const exception &e)
         {
@@ -357,286 +388,106 @@ main(int argc, char *argv[])
      * transfers.
      */
     unsigned max_elements = 
-        max(species_tree.size() / 2, gene_tree.size() / 2) + 1;
-    if (transfer_cost >= numeric_limits<Cost_type>::max() / max_elements)
+        max(g_program_input.species_tree.size() / 2, 
+            g_program_input.gene_tree.size() / 2) + 1;
+    Cost_type max_allowed = numeric_limits<Cost_type>::max() / max_elements;
+    if (g_program_input.transfer_cost >= max_allowed)
         {
             cerr << PROG_NAME << ": transfer cost is too big";
             exit(EXIT_FAILURE);
         }
-    if (duplication_cost >= numeric_limits<Cost_type>::max() / max_elements)
+    if (g_program_input.duplication_cost >= max_allowed)
         {
             cerr << PROG_NAME << ": duplication cost is too big";
             exit(EXIT_FAILURE);
         }
     
     
-    /*
-     * The dynamic programming algorithm goes here.
-     *
-     * The variables holding the input are:
-     *   species_tree
-     *   gene_tree
-     *   sigma
-     *   duplication_cost
-     *   transfer_cost
-     */
-    
-    typedef Tree_type::vid_t vid_t;
-
     /* Create the below and outside matrices. */
       
-    multi_array<Below, 2> below(boost::extents[gene_tree.size() + 1]
-                                              [species_tree.size() + 1]);
-    multi_array<Outside, 2> outside(boost::extents[gene_tree.size() + 1]
-                                                  [species_tree.size() + 1]);
+    g_below.resize(boost::extents[g_program_input.gene_tree.size() + 1]
+                                 [g_program_input.species_tree.size() + 1]);
+    g_outside.resize(boost::extents[g_program_input.gene_tree.size() + 1]
+                                   [g_program_input.species_tree.size() + 1]);
+    dp_algorithm();
 
-    /* The main loop. */
-    
-    for (vid_t u = gene_tree.postorder_begin();
-         u != gene_tree.NONE;
-         u = gene_tree.postorder_next(u))
+    /*
+     * If the only_cost flag was given, Output the cost.and exit.
+     */
+    if (g_program_options["cost-only"].as<bool>())
         {
-            /* First compute below[u][*]. */
-            for (vid_t x = species_tree.postorder_begin();
-                 x != species_tree.NONE;
-                 x = species_tree.postorder_next(x))
-                {
-                    /* If u is a leaf use sigma. */
-                    if (gene_tree.is_leaf(u))
-                        {
-                            if (species_tree.descendant(sigma[u], x))
-                                {
-                                    below[u][x].cost = 0;
-                                }
-                            continue;
-                        }
-
-                    /* If u is not a leaf compute costs. */
-                    vector<Cost_type> costs(Below::N_EVENTS, COST_INF);
-
-                    vid_t v = gene_tree.left(u);
-                    vid_t w = gene_tree.right(u);
-                    
-                    costs[Below::D] = 
-                        duplication_cost + below[v][x].cost + below[w][x].cost;
-                    costs[Below::T_LEFT] = 
-                        transfer_cost + outside[v][x].cost + below[w][x].cost;
-                    costs[Below::T_RIGHT] = 
-                        transfer_cost + outside[w][x].cost + below[v][x].cost;
-                    if (!species_tree.is_leaf(x))
-                        {
-                            vid_t y = species_tree.left(x);
-                            vid_t z = species_tree.right(x);
-                            costs[Below::S] = 
-                                below[v][y].cost + below[w][z].cost;
-                            costs[Below::S_REV]
-                                = below[v][z].cost + below[w][y].cost;
-                            costs[Below::B_LEFT] = below[u][y].cost;
-                            costs[Below::B_RIGHT] = below[u][z].cost;
-                        }
-                    Cost_type min_cost = 
-                        *min_element(costs.begin(), costs.end());
-                    below[u][x].cost = min_cost;
-                    for (unsigned i = 0; i < Below::N_EVENTS; ++i)
-                        {
-                            if (costs[i] == min_cost)
-                                below[u][x].events[i] = true;
-                        }
-                }
-
-            /* Now compute outside[u][*]. */
-            
-            for (vid_t x = species_tree.preorder_begin();
-                 x != species_tree.NONE;
-                 x = species_tree.preorder_next(x))
-                {
-                    if (species_tree.is_leaf(x))
-                        continue;
-                    
-                    vid_t y = species_tree.left(x);
-                    vid_t z = species_tree.right(x);
-                    
-                    Cost_type outside_u_x = outside[u][x].cost;
-                    Cost_type below_u_y = below[u][y].cost;
-                    Cost_type below_u_z = below[u][z].cost;
-                    outside[u][y].cost = min(outside_u_x, below_u_z);
-                    outside[u][z].cost = min(outside_u_x, below_u_y);
-
-                    if (outside[u][y].cost == outside_u_x)
-                        {
-                            copy(outside[u][x].species_vertices.begin(),
-                                 outside[u][x].species_vertices.end(),
-                                 back_inserter(outside[u][y].species_vertices));
-                        }
-                    if (outside[u][y].cost == below_u_z)
-                        {
-                            outside[u][y].species_vertices.push_back(z);
-                        }
-
-                    if (outside[u][z].cost == outside_u_x)
-                        {
-                            copy(outside[u][x].species_vertices.begin(),
-                                 outside[u][x].species_vertices.end(),
-                                 back_inserter(outside[u][z].species_vertices));
-                        }
-                    if (outside[u][z].cost == below_u_y)
-                        {
-                            outside[u][z].species_vertices.push_back(y);
-                        }
-                }
+            cout << g_below[0][0].cost << '\n';
+            return EXIT_SUCCESS;
         }
 
-    /* The DP-matrix is computed. */
-    
-    /*
-     * Output the cost.
-     */
-    cout << "Cost: " << below[0][0].cost << '\n';
-    
     /*
      * Backtrack and output all scenarios. We should do this
      * xml-style.
      */
-    
-    backtrack_scenarios_below(species_tree, gene_tree, sigma,
-                              below, outside, duplication_cost, transfer_cost,
-                              0, 0);
-    vector<Scenario> &scenarios = below[0][0].scenarios_below;
-    
-    cout << "Number of scenarios: " << scenarios.size() << '\n';
+    backtrack_scenarios_below(0, 0);
 
-    cout << "S: " << species_tree << '\n';
-    cout << "G: " << gene_tree << '\n' << '\n';
+    vector<Scenario> &scenarios = g_below[0][0].scenarios_below;
 
-    for (unsigned i = 0; i < scenarios.size(); ++i)
+    /*
+     * Switch to using the postorder numbering of vertices in the
+     * scenarios.
+     */
+    const Tree_type &G = g_program_input.gene_tree;
+    const Tree_type &S = g_program_input.species_tree;
+
+    vector<vid_t> gene_tree_numbering(G.size());
+    vector<vid_t> species_tree_numbering(S.size());
+    get_postorder_numbering(G, gene_tree_numbering);
+    get_postorder_numbering(S, species_tree_numbering);
+
+    BOOST_FOREACH(Scenario &sc, scenarios)
         {
-            Scenario &sc = scenarios[i];
-            cout << "Duplications:\t";
-            for (unsigned j = sc.duplications.find_first();
-                 j != sc.duplications.npos; j = sc.duplications.find_next(j))
+            dynamic_bitset<> new_duplications(sc.duplications.size());
+            dynamic_bitset<> new_transfers(sc.transfer_edges.size());
+            for (unsigned i = sc.duplications.find_first();
+                 i != sc.duplications.npos;
+                 i = sc.duplications.find_next(i))
                 {
-                    cout << setw(4) << j;
+                    new_duplications.set(gene_tree_numbering[i]);
                 }
-            cout << '\n';
+            for (unsigned i = sc.transfer_edges.find_first();
+                 i != sc.transfer_edges.npos;
+                 i = sc.transfer_edges.find_next(i))
+                {
+                    new_transfers.set(gene_tree_numbering[i]);
+                }
+            sc.duplications = new_duplications;
+            sc.transfer_edges = new_transfers;
+        }
+
+    sort(scenarios.begin(), scenarios.end());
+
+    cout << "Number of scenarios: " << scenarios.size() << "\n\n";
+    BOOST_FOREACH(const Scenario &sc, scenarios)
+        {
             cout << "Transfer edges:\t";
             for (unsigned j = sc.transfer_edges.find_first();
                  j != sc.transfer_edges.npos; j = sc.transfer_edges.find_next(j))
                 {
-                    cout << setw(4) << j;
+                    cout << j << " ";
+                }
+            cout << '\n';
+            cout << "Duplications:\t";
+            for (unsigned j = sc.duplications.find_first();
+                 j != sc.duplications.npos; j = sc.duplications.find_next(j))
+                {
+                    cout << j << " ";
                 }
             cout << "\n\n";
         }
     
-//     cout << "The DP-matrices (rows = genes, columns = species)\n";
-//     cout << "below:\n";
-//     cout << setw(4) << " ";
-//     for (unsigned i = 0; i < species_tree.size(); ++i)
-//         {
-//             cout << setw(4) << i;
-//         }
-//     cout << '\n';
-    
-//     for (unsigned i = 0; i < gene_tree.size(); ++i)
-//         {
-//             cout << setw(4) << i << ":";
-//             for (unsigned j = 0; j < species_tree.size(); ++j)
-//                 {
-//                     cout << setw(4) << below[i][j].cost;
-//                 }
-//             cout << '\n';
-//         }
-
-
-//     cout << "\noutside:\n";
-//     cout << setw(4) << " ";
-//     for (unsigned i = 0; i < species_tree.size(); ++i)
-//         {
-//             cout << setw(4) << i;
-//         }
-//     cout << '\n';
-//     for (unsigned i = 0; i < gene_tree.size(); ++i)
-//         {
-//             cout << setw(4) << i << ":";
-//             for (unsigned j = 0; j < species_tree.size(); ++j)
-//                 {
-//                     cout << setw(4) << outside[i][j].cost;
-//                 }
-//             cout << '\n';
-//         }
-
-//     cout << "\nbelow[u][x].scenarios_below.size():\n";
-//     cout << setw(4) << " ";
-//     for (unsigned i = 0; i < species_tree.size(); ++i)
-//         {
-//             cout << setw(4) << i;
-//         }
-//     cout << '\n';
-    
-//     for (unsigned i = 0; i < gene_tree.size(); ++i)
-//         {
-//             cout << setw(4) << i << ":";
-//             for (unsigned j = 0; j < species_tree.size(); ++j)
-//                 {
-//                     cout << setw(4) << below[i][j].scenarios_below.size();
-//                 }
-//             cout << '\n';
-//         }
-//     cout << "\nbelow[u][x].scenarios_at.size():\n";
-//     cout << setw(4) << " ";
-//     for (unsigned i = 0; i < species_tree.size(); ++i)
-//         {
-//             cout << setw(4) << i;
-//         }
-//     cout << '\n';
-    
-//     for (unsigned i = 0; i < gene_tree.size(); ++i)
-//         {
-//             cout << setw(4) << i << ":";
-//             for (unsigned j = 0; j < species_tree.size(); ++j)
-//                 {
-//                     cout << setw(4) << below[i][j].scenarios_at.size();
-//                 }
-//             cout << '\n';
-//         }
-//     cout << "\noutside[u][x].species_vertices.size():\n";
-//     cout << setw(4) << " ";
-//     for (unsigned i = 0; i < species_tree.size(); ++i)
-//         {
-//             cout << setw(4) << i;
-//         }
-//     cout << '\n';
-    
-//     for (unsigned i = 0; i < gene_tree.size(); ++i)
-//         {
-//             cout << setw(4) << i << ":";
-//             for (unsigned j = 0; j < species_tree.size(); ++j)
-//                 {
-//                     cout << setw(4) << outside[i][j].species_vertices.size();
-//                 }
-//             cout << '\n';
-//         }
-
-//     for (unsigned i = 0; i < gene_tree.size(); ++i)
-//         {
-//             for (unsigned j = 0; j < species_tree.size(); ++j)
-//                 {
-//                     cout << setw(4) << i
-//                          << setw(4) << j << '\t';
-//                     for (unsigned k = 0; k < below[i][j].events.size();++k)
-//                         {
-//                             cout << setw(6) << below[i][j].events[k];
-//                         }
-//                     cout << "\n";
-//                 }
-//         }
 
     return EXIT_SUCCESS;
 }
 
-/*
- * Helper function declarations.
- */
-
+//=============================================================================
+//                     Helper function declarations
+//=============================================================================
 
 /*
  * combine_scenarios()
@@ -650,8 +501,6 @@ void combine_scenarios(Initer1 begin1, Initer1 end1,
                        Initer2 begin2, Initer2 end2,
                        Outiter out);
 
-
-
 /*
  * backtrack_scenarios_at()
  *
@@ -659,63 +508,164 @@ void combine_scenarios(Initer1 begin1, Initer1 end1,
  * the description of the Scenario class) most parsimonious partial
  * DTL-scenario (a Scenario object) such that 'gene_vertex' is placed
  * _at_ 'species_vertex', and inserts them into
- * below[gene_vertex][species_vertex].scenarios_at.
+ * g_below[gene_vertex][species_vertex].scenarios_at.
  */
-void backtrack_scenarios_at(const Tree_type &spcies_tree,
-                            const Tree_type &gene_tree,
-                            const vector<vid_t> &sigma,
-                            multi_array<Below, 2> &below,
-                            const multi_array<Outside, 2> &outside,
-                            Cost_type duplication_cost,
-                            Cost_type transfer_cost,
-                            vid_t gene_vertex,
+void backtrack_scenarios_at(vid_t gene_vertex,
                             vid_t species_vertex);
 
 /*
- * backtrack_[speciation,duplicttion,transfer]_at()
+ * backtrack_[speciation,duplication,transfer]_at()
  *
  * These are helper functions called by backtrack_scenarios_at.
  */
 
-void backtrack_speciation_at(const Tree_type &spcies_tree,
-                             const Tree_type &gene_tree,
-                             const vector<vid_t> &sigma,
-                             multi_array<Below, 2> &below,
-                             const multi_array<Outside, 2> &outside,
-                             Cost_type duplication_cost,
-                             Cost_type transfer_cost,
-                             vid_t gene_vertex_left,
+void backtrack_speciation_at(vid_t gene_vertex_left,
                              vid_t gene_vertex_right,
                              vid_t species_vertex);
 
-void backtrack_duplication_at(const Tree_type &spcies_tree,
-                              const Tree_type &gene_tree,
-                              const vector<vid_t> &sigma,
-                              multi_array<Below, 2> &below,
-                              const multi_array<Outside, 2> &outside,
-                              Cost_type duplication_cost,
-                              Cost_type transfer_cost,
-                              vid_t gene_vertex_1,
+void backtrack_duplication_at(vid_t gene_vertex_1,
                               vid_t gene_vertex_2,
                               vid_t species_vertex);
 
-void backtrack_transfer_at(const Tree_type &spcies_tree,
-                           const Tree_type &gene_tree,
-                           const vector<vid_t> &sigma,
-                           multi_array<Below, 2> &below,
-                           const multi_array<Outside, 2> &outside,
-                           Cost_type duplication_cost,
-                           Cost_type transfer_cost,
-                           vid_t gene_vertex_at,
+void backtrack_transfer_at(vid_t gene_vertex_at,
                            vid_t gene_vertex_outside,
                            vid_t species_vertex);
 
+//=============================================================================
+//                   Function and member definitions.
+//=============================================================================
+
+void
+dp_algorithm()
+{
+    const Tree_type &G = g_program_input.gene_tree;
+    const Tree_type &S = g_program_input.species_tree;
+    const vector<vid_t> &sigma = g_program_input.sigma;
+    const Cost_type transfer_cost = g_program_input.transfer_cost;
+    const Cost_type duplication_cost = g_program_input.duplication_cost;
+
+    for (vid_t u = G.postorder_begin();
+         u != G.NONE;
+         u = G.postorder_next(u))
+        {
+            /* First compute g_below[u][*]. */
+            for (vid_t x = S.postorder_begin();
+                 x != S.NONE;
+                 x = S.postorder_next(x))
+                {
+                    /* If u is a leaf use sigma. */
+                    if (G.is_leaf(u))
+                        {
+                            if (S.descendant(sigma[u], x))
+                                {
+                                    g_below[u][x].cost = 0;
+                                }
+                            continue;
+                        }
+
+                    /* If u is not a leaf compute costs. */
+                    vector<Cost_type> costs(Below::N_EVENTS, COST_INF);
+
+                    vid_t v = G.left(u);
+                    vid_t w = G.right(u);
+                    
+                    costs[Below::D] = duplication_cost
+                        + g_below[v][x].cost + g_below[w][x].cost;
+                    costs[Below::T_LEFT] = transfer_cost
+                        + g_outside[v][x].cost + g_below[w][x].cost;
+                    costs[Below::T_RIGHT] = transfer_cost
+                        + g_outside[w][x].cost + g_below[v][x].cost;
+                    if (!S.is_leaf(x))
+                        {
+                            vid_t y = S.left(x);
+                            vid_t z = S.right(x);
+                            costs[Below::S] = 
+                                g_below[v][y].cost + g_below[w][z].cost;
+                            costs[Below::S_REV]
+                                = g_below[v][z].cost + g_below[w][y].cost;
+                            costs[Below::B_LEFT] = g_below[u][y].cost;
+                            costs[Below::B_RIGHT] = g_below[u][z].cost;
+                        }
+                    Cost_type min_cost = 
+                        *min_element(costs.begin(), costs.end());
+                    g_below[u][x].cost = min_cost;
+                    for (unsigned i = 0; i < Below::N_EVENTS; ++i)
+                        {
+                            if (costs[i] == min_cost)
+                                g_below[u][x].events[i] = true;
+                        }
+                }
+
+            /* Now compute g_outside[u][*]. */
+            
+            for (vid_t x = S.preorder_begin();
+                 x != S.NONE;
+                 x = S.preorder_next(x))
+                {
+                    if (S.is_leaf(x))
+                        continue;
+                    
+                    vid_t y = S.left(x);
+                    vid_t z = S.right(x);
+                    
+                    Cost_type outside_u_x = g_outside[u][x].cost;
+                    Cost_type below_u_y = g_below[u][y].cost;
+                    Cost_type below_u_z = g_below[u][z].cost;
+                    g_outside[u][y].cost = min(outside_u_x, below_u_z);
+                    g_outside[u][z].cost = min(outside_u_x, below_u_y);
+
+                    if (g_outside[u][y].cost == outside_u_x)
+                        {
+                            copy(g_outside[u][x].species_vertices.begin(),
+                                 g_outside[u][x].species_vertices.end(),
+                                 back_inserter(g_outside[u][y].species_vertices));
+                        }
+                    if (g_outside[u][y].cost == below_u_z)
+                        {
+                            g_outside[u][y].species_vertices.push_back(z);
+                        }
+
+                    if (g_outside[u][z].cost == outside_u_x)
+                        {
+                            copy(g_outside[u][x].species_vertices.begin(),
+                                 g_outside[u][x].species_vertices.end(),
+                                 back_inserter(g_outside[u][z].species_vertices));
+                        }
+                    if (g_outside[u][z].cost == below_u_y)
+                        {
+                            g_outside[u][z].species_vertices.push_back(y);
+                        }
+                }
+        }
+}
 
 
+template<typename Initer1, typename Initer2, typename Outiter>
+void
+combine_scenarios(Initer1 begin1, Initer1 end1,
+                  Initer2 begin2, Initer2 end2,
+                  Outiter out)
+{
+    boost::function_requires< boost::InputIteratorConcept<Initer1> >();
+    boost::function_requires< boost::InputIteratorConcept<Initer2> >();
+    boost::function_requires< boost::OutputIteratorConcept<Outiter, Scenario> >();
 
-/*
- * Function and member definitions.
- */
+    if (begin1 == end1 || begin2 == end2)
+        return;
+
+    unsigned size = begin1->duplications.size();
+
+    for (Initer1 i = begin1; i != end1; ++i)
+        {
+            for (Initer2 j = begin2; j != end2; ++j)
+                {
+                    Scenario sc(size);
+                    sc.duplications = i->duplications | j->duplications;
+                    sc.transfer_edges = i->transfer_edges | j->transfer_edges;
+                    *out++ = sc;
+                }
+        }
+}
 
 // Scenario constructor
 Scenario::Scenario(unsigned num_vertices)
@@ -726,12 +676,29 @@ Scenario::Scenario(unsigned num_vertices)
 
 // Scenario cost function
 Cost_type
-Scenario::cost(Cost_type duplication_cost, Cost_type transfer_cost)
+Scenario::cost() const
 {
-    return duplications.count() * duplication_cost +
-        transfer_edges.count() * transfer_cost;
+    return duplications.count() * g_program_input.duplication_cost +
+        transfer_edges.count() * g_program_input.transfer_cost;
 }
 
+bool
+Scenario::operator<(const Scenario &sc) const
+{
+    if (cost() < sc.cost())
+        return true;
+    if (cost() > sc.cost())
+        return false;
+    if (transfer_edges.count() < sc.transfer_edges.count())
+        return true;
+    if (transfer_edges.count() > sc.transfer_edges.count())
+        return false;
+    if (transfer_edges < sc.transfer_edges)
+        return true;
+    if (transfer_edges > sc.transfer_edges)
+        return false;
+    return duplications < sc.duplications;
+}
 
 // Below constructor
 Below::Below() : cost(COST_INF), events(N_EVENTS, false),
@@ -747,49 +714,20 @@ Outside::Outside() : cost(COST_INF)
     ; // Do nothing
 }
 
-/*
- * Template function definitions. (must be here since definition must
- * be available at point of usage)
- */
 
-template<typename Initer1, typename Initer2, typename Outiter>
-void combine_scenarios(Initer1 begin1, Initer1 end1,
-                       Initer2 begin2, Initer2 end2,
-                       Outiter out)
+
+
+void
+backtrack_scenarios_below(vid_t u, vid_t x)
 {
-    if (begin1 == end1 || begin2 == end2)
+    const Tree_type &G = g_program_input.gene_tree;
+    const Tree_type &S = g_program_input.species_tree;
+    const vector<vid_t> &sigma = g_program_input.sigma;
+
+    if (g_below[u][x].scenarios_below_computed)
         return;
 
-    unsigned size = begin1->duplications.size();
-
-    for (Initer1 i = begin1; i != end1; ++i)
-        {
-            for (Initer2 j = begin2; j != end2; ++j)
-                {
-                    Scenario sc(size);
-                    sc.duplications = i->duplications | j->duplications;
-                    sc.transfer_edges = i->transfer_edges | j->transfer_edges;
-                    *out = sc; out++;
-                }
-        }
-}
-
-
-
-void backtrack_scenarios_below(const Tree_type &S,
-                               const Tree_type &G,
-                               const vector<vid_t> &sigma,
-                               multi_array<Below, 2> &below,
-                               const multi_array<Outside, 2> &outside,
-                               Cost_type duplication_cost,
-                               Cost_type transfer_cost,
-                               vid_t u, 
-                               vid_t x)
-{
-    if (below[u][x].scenarios_below_computed)
-        return;
-
-    vector<Scenario> &scenarios = below[u][x].scenarios_below;
+    vector<Scenario> &scenarios = g_below[u][x].scenarios_below;
     
     /* If u is a leaf. */
     if (G.is_leaf(u))
@@ -798,15 +736,13 @@ void backtrack_scenarios_below(const Tree_type &S,
                 {
                     scenarios.push_back(Scenario(G.size()));
                 }
-            below[u][x].scenarios_below_computed = true;
+            g_below[u][x].scenarios_below_computed = true;
             return;
         }
     
     /* If u is not a leaf. */
-    backtrack_scenarios_at(S, G, sigma, below, outside,
-                           duplication_cost, transfer_cost,
-                           u, x);
-    copy(below[u][x].scenarios_at.begin(), below[u][x].scenarios_at.end(),
+    backtrack_scenarios_at(u, x);
+    copy(g_below[u][x].scenarios_at.begin(), g_below[u][x].scenarios_at.end(),
          back_inserter(scenarios));
 
     if (!S.is_leaf(x))
@@ -814,44 +750,36 @@ void backtrack_scenarios_below(const Tree_type &S,
             vid_t y = S.left(x);
             vid_t z = S.right(x);
 
-            if (below[u][x].events[Below::B_LEFT] == true)
+            if (g_below[u][x].events[Below::B_LEFT] == true)
                 {
-                    backtrack_scenarios_below(S, G, sigma, below, outside,
-                                              duplication_cost, transfer_cost,
-                                              u, y);
-                    copy(below[u][y].scenarios_below.begin(),
-                         below[u][y].scenarios_below.end(),
+                    backtrack_scenarios_below(u, y);
+                    copy(g_below[u][y].scenarios_below.begin(),
+                         g_below[u][y].scenarios_below.end(),
                          back_inserter(scenarios));
                 }
-            if (below[u][x].events[Below::B_RIGHT] == true)
+            if (g_below[u][x].events[Below::B_RIGHT] == true)
                 {
-                    backtrack_scenarios_below(S, G, sigma, below, outside,
-                                              duplication_cost, transfer_cost,
-                                              u, z);
-                    copy(below[u][z].scenarios_below.begin(),
-                         below[u][z].scenarios_below.end(),
+                    backtrack_scenarios_below(u, z);
+                    copy(g_below[u][z].scenarios_below.begin(),
+                         g_below[u][z].scenarios_below.end(),
                          back_inserter(scenarios));
                 }
         }
-    below[u][x].scenarios_below_computed = true;
+    g_below[u][x].scenarios_below_computed = true;
 }
 
-void backtrack_scenarios_at(const Tree_type &S,
-                            const Tree_type &G,
-                            const vector<vid_t> &sigma,
-                            multi_array<Below, 2> &below,
-                            const multi_array<Outside, 2> &outside,
-                            Cost_type duplication_cost,
-                            Cost_type transfer_cost,
-                            vid_t u,
-                            vid_t x)
+void
+backtrack_scenarios_at(vid_t u, vid_t x)
 {
-    if (below[u][x].scenarios_at_computed)
+    const Tree_type &G = g_program_input.gene_tree;
+    const vector<vid_t> &sigma = g_program_input.sigma;
+
+    if (g_below[u][x].scenarios_at_computed)
         return;
     
     typedef vector<Scenario>::iterator Iter;
     
-    vector<Scenario> &scenarios = below[u][x].scenarios_at;
+    vector<Scenario> &scenarios = g_below[u][x].scenarios_at;
 
     /* If u is a leaf. */
     if (G.is_leaf(u))
@@ -860,7 +788,7 @@ void backtrack_scenarios_at(const Tree_type &S,
                 {
                     scenarios.push_back(Scenario(G.size()));
                 }
-            below[u][x].scenarios_at_computed = true;
+            g_below[u][x].scenarios_at_computed = true;
             return;
         }
 
@@ -871,58 +799,43 @@ void backtrack_scenarios_at(const Tree_type &S,
     /*
      * In case of speciation being optimal
      */
-    if (below[u][x].events[Below::S])
+    if (g_below[u][x].events[Below::S])
         {
-            backtrack_speciation_at(S, G, sigma, below, outside,
-                                    duplication_cost, transfer_cost,
-                                    u_left, u_right, x);
+            backtrack_speciation_at(u_left, u_right, x);
         }
 
-    if (below[u][x].events[Below::S_REV])
+    if (g_below[u][x].events[Below::S_REV])
         {
-            backtrack_speciation_at(S, G, sigma, below, outside,
-                                    duplication_cost, transfer_cost,
-                                    u_right, u_left, x);
+            backtrack_speciation_at(u_right, u_left, x);
         }
     /*
      * In case of transfer being optimal.
      */
-    if (below[u][x].events[Below::T_LEFT])
+    if (g_below[u][x].events[Below::T_LEFT])
         {
-            backtrack_transfer_at(S, G, sigma, below, outside,
-                                  duplication_cost, transfer_cost,
-                                  u_right, u_left, x);
+            backtrack_transfer_at(u_right, u_left, x);
         }
-    if (below[u][x].events[Below::T_RIGHT])
+    if (g_below[u][x].events[Below::T_RIGHT])
         {
-            backtrack_transfer_at(S, G, sigma, below, outside,
-                                  duplication_cost, transfer_cost,
-                                  u_left, u_right, x);
+            backtrack_transfer_at(u_left, u_right, x);
         }
         
     /*
      * In case of duplication being optimal.
      */
-    if (below[u][x].events[Below::D])
+    if (g_below[u][x].events[Below::D])
         {
-            backtrack_duplication_at(S, G, sigma, below, outside,
-                                     duplication_cost, transfer_cost,
-                                     u_left, u_right, x);
+            backtrack_duplication_at(u_left, u_right, x);
         }
-    below[u][x].scenarios_at_computed = true;
+    g_below[u][x].scenarios_at_computed = true;
 }
 
-void backtrack_speciation_at(const Tree_type &S,
-                             const Tree_type &G,
-                             const vector<vid_t> &sigma,
-                             multi_array<Below, 2> &below,
-                             const multi_array<Outside, 2> &outside,
-                             Cost_type duplication_cost,
-                             Cost_type transfer_cost,
-                             vid_t left,
-                             vid_t right,
-                             vid_t x)
+void
+backtrack_speciation_at(vid_t left, vid_t right, vid_t x)
 {
+    const Tree_type &G = g_program_input.gene_tree;
+    const Tree_type &S = g_program_input.species_tree;
+
     /*
      * We are sure that scenarios must be computed here. The check is
      * made in backtrack_scenarios_at() which calls this function.
@@ -933,32 +846,23 @@ void backtrack_speciation_at(const Tree_type &S,
     vid_t x_left = S.left(x);
     vid_t x_right = S.right(x);
 
-    backtrack_scenarios_below(S, G, sigma, below, outside,
-                              duplication_cost, transfer_cost,
-                              left, x_left);
-    backtrack_scenarios_below(S, G, sigma, below, outside,
-                              duplication_cost, transfer_cost, 
-                              right, x_right);
+    backtrack_scenarios_below(left, x_left);
+    backtrack_scenarios_below(right, x_right);
             
-    vector<Scenario> &left_scenarios = below[left][x_left].scenarios_below;
-    vector<Scenario> &right_scenarios = below[right][x_right].scenarios_below;
+    vector<Scenario> &left_scenarios = g_below[left][x_left].scenarios_below;
+    vector<Scenario> &right_scenarios = g_below[right][x_right].scenarios_below;
 
     combine_scenarios(left_scenarios.begin(), left_scenarios.end(),
                       right_scenarios.begin(), right_scenarios.end(),
-                      back_inserter(below[G.parent(left)][x].scenarios_at));
+                      back_inserter(g_below[G.parent(left)][x].scenarios_at));
 }
 
-void backtrack_duplication_at(const Tree_type &S,
-                              const Tree_type &G,
-                              const vector<vid_t> &sigma,
-                              multi_array<Below, 2> &below,
-                              const multi_array<Outside, 2> &outside,
-                              Cost_type duplication_cost,
-                              Cost_type transfer_cost,
-                              vid_t v,
-                              vid_t w,
-                              vid_t x)
+void
+backtrack_duplication_at(vid_t v, vid_t w, vid_t x)
 {
+    const Tree_type &G = g_program_input.gene_tree;
+    const Tree_type &S = g_program_input.species_tree;
+
     /*
      * We are sure that scenarios must be computed here. The check is
      * made in backtrack_scenarios_at() which calls this function.
@@ -967,16 +871,12 @@ void backtrack_duplication_at(const Tree_type &S,
 
     vector<Scenario> all;
 
-    backtrack_scenarios_at(S, G, sigma, below, outside,
-                           duplication_cost, transfer_cost,
-                           v, x);
-    backtrack_scenarios_at(S, G, sigma, below, outside,
-                           duplication_cost, transfer_cost,
-                           w, x);
-    combine_scenarios(below[v][x].scenarios_at.begin(),
-                      below[v][x].scenarios_at.end(),
-                      below[w][x].scenarios_at.begin(),
-                      below[w][x].scenarios_at.end(),
+    backtrack_scenarios_at(v, x);
+    backtrack_scenarios_at(w, x);
+    combine_scenarios(g_below[v][x].scenarios_at.begin(),
+                      g_below[v][x].scenarios_at.end(),
+                      g_below[w][x].scenarios_at.begin(),
+                      g_below[w][x].scenarios_at.end(),
                       back_inserter(all));
 
     if (!S.is_leaf(x))
@@ -984,68 +884,49 @@ void backtrack_duplication_at(const Tree_type &S,
             vid_t y = S.left(x);
             vid_t z = S.right(x);
 
-            backtrack_scenarios_below(S, G, sigma, below, outside,
-                                      duplication_cost, transfer_cost,
-                                      w, y);
-            backtrack_scenarios_below(S, G, sigma, below, outside,
-                                      duplication_cost, transfer_cost,
-                                      w, z);
-            backtrack_scenarios_at(S, G, sigma, below, outside,
-                                   duplication_cost, transfer_cost,
-                                   v, x);
-            combine_scenarios(below[w][y].scenarios_below.begin(),
-                              below[w][y].scenarios_below.end(),
-                              below[v][x].scenarios_at.begin(),
-                              below[v][x].scenarios_at.end(),
+            backtrack_scenarios_below(w, y);
+            backtrack_scenarios_below(w, z);
+            backtrack_scenarios_at(v, x);
+            combine_scenarios(g_below[w][y].scenarios_below.begin(),
+                              g_below[w][y].scenarios_below.end(),
+                              g_below[v][x].scenarios_at.begin(),
+                              g_below[v][x].scenarios_at.end(),
                               back_inserter(all));
-            combine_scenarios(below[w][z].scenarios_below.begin(),
-                              below[w][z].scenarios_below.end(),
-                              below[v][x].scenarios_at.begin(),
-                              below[v][x].scenarios_at.end(),
+            combine_scenarios(g_below[w][z].scenarios_below.begin(),
+                              g_below[w][z].scenarios_below.end(),
+                              g_below[v][x].scenarios_at.begin(),
+                              g_below[v][x].scenarios_at.end(),
                               back_inserter(all));
 
-            backtrack_scenarios_below(S, G, sigma, below, outside,
-                                      duplication_cost, transfer_cost,
-                                      v, y);
-            backtrack_scenarios_below(S, G, sigma, below, outside,
-                                      duplication_cost, transfer_cost,
-                                      v, z);
-            backtrack_scenarios_at(S, G, sigma, below, outside,
-                                   duplication_cost, transfer_cost,
-                                   w, x);
-            combine_scenarios(below[v][y].scenarios_below.begin(),
-                              below[v][y].scenarios_below.end(),
-                              below[w][x].scenarios_at.begin(),
-                              below[w][x].scenarios_at.end(),
+            backtrack_scenarios_below(v, y);
+            backtrack_scenarios_below(v, z);
+            backtrack_scenarios_at(w, x);
+            combine_scenarios(g_below[v][y].scenarios_below.begin(),
+                              g_below[v][y].scenarios_below.end(),
+                              g_below[w][x].scenarios_at.begin(),
+                              g_below[w][x].scenarios_at.end(),
                               back_inserter(all));
-            combine_scenarios(below[v][z].scenarios_below.begin(),
-                              below[v][z].scenarios_below.end(),
-                              below[w][x].scenarios_at.begin(),
-                              below[w][x].scenarios_at.end(),
+            combine_scenarios(g_below[v][z].scenarios_below.begin(),
+                              g_below[v][z].scenarios_below.end(),
+                              g_below[w][x].scenarios_at.begin(),
+                              g_below[w][x].scenarios_at.end(),
                               back_inserter(all));
         }
     for (unsigned i = 0; i < all.size(); ++i)
         {
             all[i].duplications.set(u);
-            if (all[i].cost(duplication_cost, transfer_cost) == 
-                below[u][x].cost)
+            if (all[i].cost() == g_below[u][x].cost)
                 {
-                    below[u][x].scenarios_at.push_back(all[i]);
+                    g_below[u][x].scenarios_at.push_back(all[i]);
                 }
         }
 }
 
-void backtrack_transfer_at(const Tree_type &S,
-                           const Tree_type &G,
-                           const vector<vid_t> &sigma,
-                           multi_array<Below, 2> &below,
-                           const multi_array<Outside, 2> &outside,
-                           Cost_type duplication_cost,
-                           Cost_type transfer_cost,
-                           vid_t u_at,
-                           vid_t u_outside,
-                           vid_t x)
+void
+backtrack_transfer_at(vid_t u_at, vid_t u_outside, vid_t x)
 {
+    const Tree_type &G = g_program_input.gene_tree;
+
     /*
      * We are sure that scenarios must be computed here. The check is
      * made in backtrack_scenarios_at() which calls this function.
@@ -1053,31 +934,26 @@ void backtrack_transfer_at(const Tree_type &S,
     vector<Scenario> all;
     
     vector<vid_t>::const_iterator i =
-        outside[u_outside][x].species_vertices.begin();
+        g_outside[u_outside][x].species_vertices.begin();
     vector<vid_t>::const_iterator e =
-        outside[u_outside][x].species_vertices.end();
+        g_outside[u_outside][x].species_vertices.end();
     for ( ; i != e; ++i)
         {
-            backtrack_scenarios_below(S, G, sigma, below, outside,
-                                      duplication_cost, transfer_cost,
-                                      u_outside, *i);
+            backtrack_scenarios_below(u_outside, *i);
         }
-    backtrack_scenarios_at(S, G, sigma, below, outside,
-                           duplication_cost, transfer_cost,
-                           u_at, x);
+    backtrack_scenarios_at(u_at, x);
 
-    for (i = outside[u_outside][x].species_vertices.begin(); i != e; ++i)
+    for (i = g_outside[u_outside][x].species_vertices.begin(); i != e; ++i)
         {
-            combine_scenarios(below[u_outside][*i].scenarios_below.begin(),
-                              below[u_outside][*i].scenarios_below.end(),
-                              below[u_at][x].scenarios_at.begin(),
-                              below[u_at][x].scenarios_at.end(),
+            combine_scenarios(g_below[u_outside][*i].scenarios_below.begin(),
+                              g_below[u_outside][*i].scenarios_below.end(),
+                              g_below[u_at][x].scenarios_at.begin(),
+                              g_below[u_at][x].scenarios_at.end(),
                               back_inserter(all));
         }
     for (unsigned j = 0; j < all.size(); ++j)
         {
             all[j].transfer_edges.set(u_outside);
-            below[G.parent(u_at)][x].scenarios_at.push_back(all[j]);
+            g_below[G.parent(u_at)][x].scenarios_at.push_back(all[j]);
         }
 }
-
