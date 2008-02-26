@@ -168,7 +168,7 @@ struct Program_input {
 const string PROG_NAME = "phyltr-dp";
 const string USAGE = 
     "Usage: " + PROG_NAME + " [OPTION]... SPECIES_TREE_FILE GENE_TREE_FILE "
-    "GENEMAP_FILE";
+    "MAP_FILE";
 const Cost_type COST_INF = numeric_limits<Cost_type>::infinity();
 
 Program_input g_program_input = Program_input();

@@ -5,7 +5,7 @@ BuildDir('build', 'src')
 
 # Set up the environment
 env = Environment()
-env.Append(CCFLAGS = '-g -Wall -pedantic -ansi')
+env.Append(CCFLAGS = '-g -O2 -Wall -pedantic -ansi')
 
 # Make sure you are using SYSDIR if it is set
 env.Replace(SYSDIR = os.environ['SYSDIR'])
@@ -31,5 +31,5 @@ env.Default([phyltr_fpt, phyltr_dp])
 
 test_target = env.Command('test', None, '@cd tests; python test.py')
 env.Clean([phyltr_dp, phyltr_fpt],
-          Split('tests/s tests/g tests/sigma tests/res-fpt tests/res-dp'))
+          Split('tests/s tests/g tests/sigma tests/res-fpt tests/res-dp scripts/phyltr.pyc'))
 env.Depends(test_target, [phyltr_dp, phyltr_fpt])

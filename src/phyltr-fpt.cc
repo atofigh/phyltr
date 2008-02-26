@@ -467,6 +467,8 @@ fpt_algorithm_simple(OutputIterator solutions)
 {
     boost::function_requires< boost::OutputIteratorConcept<OutputIterator, Candidate_ptr> >();
 
+    static bool print_inelegant_warning = true;
+
     const Tree_type &G = g_program_input.gene_tree;
     const Tree_type &S = g_program_input.species_tree;
     const Cost_type duplication_cost = g_program_input.duplication_cost;
@@ -497,11 +499,12 @@ fpt_algorithm_simple(OutputIterator solutions)
                         {
                             *solutions++ = c1;
                         }
-                    else
+                    else if (print_inelegant_warning)
                         {
                             clog << PROG_NAME << ": Found inelegant scenario!\n";
                             clog << c1->duplications << "\n"
                                  << c1->transfer_edges << "\n";
+                            print_inelegant_warning = false;
                         }
                     continue;
                 }
@@ -557,7 +560,7 @@ fpt_algorithm_simple(OutputIterator solutions)
             if (forced_duplication)
                 continue;
 
-            vid_t v, w;
+            vid_t v = 0, w = 0;
 
             /* Find a minimal vertex in R and resolve it in three ways. */
             for (unsigned i = 0; i < R.size(); ++i)
