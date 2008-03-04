@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <ostream>
 #include <stdexcept>
+#include <sys/time.h>
 
 template<typename T>
 void 
@@ -121,6 +122,30 @@ operator<<(std::ostream &out, const Binary_tree<T> &tree)
 {
     output_subtree(out, tree, 0);
     return out;
+}
+
+
+template <class RandomNumberGenerator>
+void
+init_rand(RandomNumberGenerator &engine)
+{
+    /*
+     * Seed the random number generator.
+     */
+    timeval tv;
+    gettimeofday(&tv, 0);
+    unsigned seed = tv.tv_sec * 1000000 + tv.tv_usec;
+    engine.seed(seed);
+}
+
+template <class RandomNumberGenerator>
+void
+init_rand(RandomNumberGenerator &engine, unsigned seed)
+{
+    /*
+     * Seed the random number generator.
+     */
+    engine.seed(seed);
 }
 
 

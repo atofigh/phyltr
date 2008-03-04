@@ -15,6 +15,8 @@ extern "C" {
 #include <string>
 #include <iosfwd>
 #include <vector>
+#include <boost/random.hpp>
+
 
 /*
  * NHtree_is_binary()
@@ -80,6 +82,38 @@ void get_postorder_numbering(const Binary_tree<T> &tree,
  */
 template<typename T>
 std::ostream &operator<<(std::ostream &out, const Binary_tree<T> &tree);
+
+
+/*
+ * Global random number generators:
+ *
+ * 'g_rng_ui': used to get a uniformly distributed random
+ * unsigned. g_rng_ui(n) gives a random number in the range [0,n).
+ *
+ * 'g_rng_d': used to get a uniformly distributed random double in the
+ * range [0,1).
+ *
+ * The random number engine 'g_generator' should be seeded in main.
+ */
+extern boost::mt19937    g_generator;
+extern boost::random_number_generator<boost::mt19937, unsigned> g_rng_ui;
+extern boost::variate_generator<boost::mt19937&, boost::uniform_real<> > g_rng_d;
+
+
+/*
+ * init_rand()
+ *
+ * initializes the random number generator using gettimeofday() or a
+ * supplied seed. 'engine' must have a seed-method taking an unsigned
+ * int as argument.
+ */
+template <class RandomNumberGenerator>
+void init_rand(RandomNumberGenerator &engine);
+
+template <class RandomNumberGenerator>
+void init_rand(RandomNumberGenerator &engine, unsigned seed);
+
+
 
 
 

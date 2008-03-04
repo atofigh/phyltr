@@ -1,4 +1,5 @@
 #include "common.hh"
+#include <boost/random.hpp>
 
 bool
 NHtree_is_binary(NHNode *root)
@@ -17,3 +18,9 @@ NHtree_is_binary(NHNode *root)
         && NHtree_is_binary(root->children->next->node);
 }
 
+
+boost::mt19937           g_generator;
+boost::random_number_generator<boost::mt19937, unsigned>
+                         g_rng_ui(g_generator);
+boost::variate_generator<boost::mt19937&, boost::uniform_real<> >
+                         g_rng_d(g_generator, boost::uniform_real<>());
