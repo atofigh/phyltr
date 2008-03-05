@@ -17,7 +17,11 @@ create_binary_tree(NHNode *root, Binary_tree<T> &tree,
 
     char *left_label = root->children->node->label;
     char *right_label = root->children->next->node->label;
-    tree.add_children(ext, T(1), T(1),
+    double left_length = root->children->node->branchLength;
+    double right_length = root->children->next->node->branchLength;
+    tree.add_children(ext,
+                      T(std::max(left_length, 0.0)),
+                      T(std::max(right_length, 0.0)),
                       left_label == 0 ? "" : left_label,
                       right_label == 0 ? "" : right_label);
 

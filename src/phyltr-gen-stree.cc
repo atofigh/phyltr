@@ -15,6 +15,8 @@
 #include <cstdlib>               // At least for EXIT_SUCCESS and EXIT_FAILURE
 #include <algorithm>
 #include <vector>
+#include <iostream>
+#include <iomanip>
 
 //============================================================================
 //             Namespace declarations and using directives.
@@ -35,7 +37,7 @@ struct Node {
     Node_ptr parent, left, right;
     
     Node(double t, Node_ptr p, Node_ptr l, Node_ptr r)
-        : time(time), parent(p), left(l), right(r)
+        : time(t), parent(p), left(l), right(r)
     {
     }
 };
@@ -45,22 +47,32 @@ struct Node {
 //                   Global Constants and variables.
 //============================================================================
 
-const string PROG_NAME = "pro-gen-species-tree";
-const string USAGE = "Usage: " + PROG_NAME + " [OPTION]... TIME BIRTH-RATE DEATH-RATE";
+const string PROG_NAME = "phyltr-gen-stree";
+const string USAGE = "Usage: " + PROG_NAME +
+    " [OPTION]... TIME BIRTH-RATE DEATH-RATE";
 
 boost::program_options::variables_map g_options;
 
-const int MAX_ATTEMPTS = 1000000; // The maximum number of times the
-                                // process will be run if the species
-                                // goes extinct.
+const int MAX_ATTEMPTS = 1000000;       // The maximum number of times the
+                                        // process will be run if the
+                                        // species goes extinct.
+const unsigned LENGTH_PRECISION = 3;    // The precision with which
+                                        // times on the trees will be
+                                        // printed.
 
 //=============================================================================
 //                        Function declarations
 //=============================================================================
 
-void print_tree(Node_ptr root);
-unsigned print_tree_r(Node_ptr node, unsigned next_leaf_id);
-
+/*
+ * print_tree()
+ *
+ * Prints the tree rooted at 'root' to cout. If 'output_lengths' is
+ * true, then the lenghts printed for each edge is the time of the
+ * node minus the time of the parent's time. Otherwise, if
+ * 'output_lengths' is false, then the time of each node is printed.
+ */
+void print_tree(Node_ptr root, bool output_lengths = true);
 
 //=============================================================================
 //         Template and inline function and member definitions.
@@ -234,7 +246,14 @@ main(int argc, char *argv[])
                             Node_ptr parent = np->parent;
                             Node_ptr sibling = parent->left == np ? parent->right : parent->left;
                             sibling->parent = sibling->parent->parent;
-                            if (np->parent == root)
+                            if (sibling->parent)
+                                {
+                                    if (sibling->parent->left == parent)
+                                        sibling->parent->left = sibling;
+                                    else
+                                        sibling->parent->right = sibling;
+                                }
+                            else
                                 root = sibling;
                             swap(leaves[choice], leaves.back());
                             leaves.pop_back();
@@ -245,13 +264,15 @@ main(int argc, char *argv[])
     /* Print error message if all species went extinct. (what else?) */
     if (leaves.empty())
         {
-            cerr << PROG_NAME << ": The species became extinct during the process\n";
+            cerr << PROG_NAME
+                 << ": The species became extinct during all "
+                 << MAX_ATTEMPTS << " runs of the process\n";
             exit(EXIT_FAILURE);
         }
     
     /* Print the tree that is reachable from the root. */
     print_tree(root);
-
+ 
     return EXIT_SUCCESS;
 }
 
@@ -259,35 +280,61 @@ main(int argc, char *argv[])
 //                     Helper function declarations
 //=============================================================================
 
-
+unsigned print_tree_r(Node_ptr node, unsigned next_leaf_id, bool output_lengths);
 
 //=============================================================================
 //                   Function and member definitions.
 //=============================================================================
 
 void
-print_tree(Node_ptr root)
+print_tree(Node_ptr root, bool output_lengths)
 {
-    print_tree_r(root, 0);
+    unsigned next_leaf_id = 0;
+    /* if node is a leaf. */
+    if (!root->left)
+        {
+            cout << "s" << next_leaf_id;
+            cout << ":" << setprecision(LENGTH_PRECISION) << root->time;
+            cout << ";\n";
+            
+            return;
+        }
+
+    /* if node is not a leaf. */
+    cout << "(";
+    next_leaf_id = print_tree_r(root->left, next_leaf_id, output_lengths);
+    cout << ", ";
+    next_leaf_id = print_tree_r(root->right, next_leaf_id, output_lengths);
+    cout << ")";
+    cout << ":" << setprecision(LENGTH_PRECISION) << root->time;
     cout << ";\n";
 }
 
 unsigned
-print_tree_r(Node_ptr node, unsigned next_leaf_id)
+print_tree_r(Node_ptr node, unsigned next_leaf_id, bool output_lengths)
 {
     /* if node is a leaf. */
     if (!node->left)
         {
             cout << "s" << next_leaf_id;
+            if (output_lengths)
+                cout << ":" << setprecision(LENGTH_PRECISION) << (node->time - node->parent->time);
+            else
+                cout << ":" << setprecision(LENGTH_PRECISION) << node->time;
             return next_leaf_id + 1;
         }
 
     /* if node is not a leaf. */
     cout << "(";
-    next_leaf_id = print_tree_r(node->left, next_leaf_id);
+    next_leaf_id = print_tree_r(node->left, next_leaf_id, output_lengths);
     cout << ", ";
-    next_leaf_id = print_tree_r(node->right, next_leaf_id);
+    next_leaf_id = print_tree_r(node->right, next_leaf_id, output_lengths);
     cout << ")";
+    if (output_lengths)
+        cout << ":" << setprecision(LENGTH_PRECISION) << (node->time - node->parent->time);
+    else
+        cout << ":" << setprecision(LENGTH_PRECISION) << node->time;
+    
     
     return next_leaf_id;
 }
