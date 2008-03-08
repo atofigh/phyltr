@@ -20,8 +20,8 @@ create_binary_tree(NHNode *root, Binary_tree<T> &tree,
     double left_length = root->children->node->branchLength;
     double right_length = root->children->next->node->branchLength;
     tree.add_children(ext,
-                      T(std::max(left_length, 0.0)),
-                      T(std::max(right_length, 0.0)),
+                      left_length <= 0 ? T(1) : T(left_length),
+                      right_length <= 0 ? T(1) : T(right_length),
                       left_label == 0 ? "" : left_label,
                       right_label == 0 ? "" : right_label);
 
