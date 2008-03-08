@@ -31,7 +31,11 @@ phyltr_gen_stree = env.Program(target = 'bin/phyltr-gen-stree',
                                source = ['build/phyltr-gen-stree.cc'] + common_objs,
                                LIBS = ['boost_program_options'])
 
-env.Default([phyltr_fpt, phyltr_dp, phyltr_gen_stree])
+phyltr_gen_gtree = env.Program(target = 'bin/phyltr-gen-gtree',
+                               source = ['build/phyltr-gen-gtree.cc'] + common_objs,
+                               LIBS = ['NHparser', 'boost_program_options'])
+
+env.Default([phyltr_fpt, phyltr_dp, phyltr_gen_stree, phyltr_gen_gtree])
 
 test_target = env.Command('test', None, '@cd tests; python test.py')
 env.Clean([phyltr_dp, phyltr_fpt, phyltr_gen_stree],
