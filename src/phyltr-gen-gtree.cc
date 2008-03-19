@@ -75,9 +75,12 @@ const string USAGE = "Usage: " + PROG_NAME +
 /* helper constant for null shared pointer to Nodes. */
 Node_ptr null;
 
-
 /* g_options contains the command line options. */
 boost::program_options::variables_map g_options;
+
+/* The variable holding the maximum number of attempts of creating a
+   gene tree with at least one leaf. */
+unsigned max_attempts;
 
 /* The rates of duplication, transfer, and death respectively. */
 double delta, tau, mu;
@@ -156,7 +159,11 @@ main(int argc, char *argv[])
                  "If not set, the birth-death process starts according to the length of "
                  "the root of the species tree. E.g., if you want to force the process "
                  "to start at the first speciation in the species tree, then set this "
-                 "paramter to zero.");
+                 "paramter to zero.")
+                ("max-attempts,a",
+                 po::value<unsigned>(&max_attempts)->default_value(10000),
+                 "The maximum number of times the process will run if the "
+                 "species goes extinct during.")
                 ;
             
             /* Declare positional options. */
@@ -226,6 +233,15 @@ main(int argc, char *argv[])
             cerr << PROG_NAME << ": negative root-length\n";
             exit(EXIT_FAILURE);
         }
+
+    /* Check that max-attempts is not zero. */
+    if (g_options["max-attempts"].as<unsigned>() == 0)
+        {
+            cerr << PROG_NAME << ": "
+                 << "max-attempts was set to zero.\n";
+            exit(EXIT_FAILURE);
+        }
+    
 
     /*
      * Read the species tree.
@@ -317,81 +333,86 @@ main(int argc, char *argv[])
      * in delta, tau, and mu. Go create the gene tree!
      */
 
-    /* Create a vector with slice times in decreasing order so that we
-       can pop the times from the back efficiently). */
-    vector<double> times;
-    for (vid_t v = 1; v < stree.size(); ++v)
+    unsigned attempts = max_attempts;
+    while (gtree_root == 0 && attempts--)
         {
-            times.push_back(stree.time(v));
-        }
-    sort(times.begin(), times.end(), greater<double>());
-
-    /* Create a vector that will keep track of the leaves of the gene tree. */
-    vector<Node_ptr> cur_genes;
-
-    /* Create a vector keeping track of the current edges of the slice. */
-    vector<vid_t> slice;
-    
-    /* Start with a single gene at or before the species tree root. */
-    gtree_root.reset(new Node(null, null, null, 0, Node::none, false));
-    cur_genes.push_back(gtree_root);
-    slice.push_back(0);
-
-    /* Determine the time before the first speciation. */
-    double root_time = stree.time(0);
-    if (g_options.count("root-length"))
-        root_time = g_options["root-length"].as<double>();
-
-    /* Run the process before the first speciation. */
-    advance_process(root_time, slice, cur_genes);
-    
-    /* The first speciation occurs. Replace the stree root edge with
-       its children, and duplicate the genes. */
-    if (!stree.is_leaf(0))
-        {
-            speciate(stree, slice, 0, cur_genes);
-        }
-    /* Keep advancing and taking care of speciations until the end. */
-    /* Note that leaves of stree might not end at the same time. */
-    double cur_time = stree.time(0);
-    while (times.empty() == false)
-        {
-            /* Advance the process until next speciation/leaf. */
-            advance_process(times.back() - cur_time, slice, cur_genes);
-            cur_time = times.back();
-            times.pop_back();
-
-            /* find an stree edge that ends at the current time */
-            unsigned idx = 0;
-            for (idx = 0; idx < slice.size(); ++idx)
+            /* Create a vector with slice times in decreasing order so that we
+               can pop the times from the back efficiently). */
+            vector<double> times;
+            for (vid_t v = 1; v < stree.size(); ++v)
                 {
-                    if (stree.time(slice[idx]) == cur_time)
-                        break;
+                    times.push_back(stree.time(v));
                 }
-            vid_t cur_snode = slice[idx];
-            /* cur_snode is either speciation or a leaf. */
-            if (stree.is_leaf(cur_snode))
-                {
-                    using namespace boost::lambda;
-                    vector<Node_ptr>::iterator new_end = 
-                        remove_if(cur_genes.begin(),
-                                  cur_genes.end(),
-                                  &*_1 ->* &Node::stree_label == cur_snode);
-                    cur_genes.erase(new_end, cur_genes.end());
+            sort(times.begin(), times.end(), greater<double>());
 
-                    swap(slice[idx], slice.back());
-                    slice.pop_back();
-                }
-            else
+            /* Create a vector that will keep track of the leaves of the gene tree. */
+            vector<Node_ptr> cur_genes;
+
+            /* Create a vector keeping track of the current edges of the slice. */
+            vector<vid_t> slice;
+    
+            /* Start with a single gene at or before the species tree root. */
+            gtree_root.reset(new Node(null, null, null, 0, Node::none, false));
+            cur_genes.push_back(gtree_root);
+            slice.push_back(0);
+
+            /* Determine the time before the first speciation. */
+            double root_time = stree.time(0);
+            if (g_options.count("root-length"))
+                root_time = g_options["root-length"].as<double>();
+
+            /* Run the process before the first speciation. */
+            advance_process(root_time, slice, cur_genes);
+    
+            /* The first speciation occurs. Replace the stree root edge with
+               its children, and duplicate the genes. */
+            if (!stree.is_leaf(0))
                 {
-                    speciate(stree, slice, idx, cur_genes);
+                    speciate(stree, slice, 0, cur_genes);
+                }
+            /* Keep advancing and taking care of speciations until the end. */
+            /* Note that leaves of stree might not end at the same time. */
+            double cur_time = stree.time(0);
+            while (times.empty() == false)
+                {
+                    /* Advance the process until next speciation/leaf. */
+                    advance_process(times.back() - cur_time, slice, cur_genes);
+                    cur_time = times.back();
+                    times.pop_back();
+
+                    /* find an stree edge that ends at the current time */
+                    unsigned idx = 0;
+                    for (idx = 0; idx < slice.size(); ++idx)
+                        {
+                            if (stree.time(slice[idx]) == cur_time)
+                                break;
+                        }
+                    vid_t cur_snode = slice[idx];
+                    /* cur_snode is either speciation or a leaf. */
+                    if (stree.is_leaf(cur_snode))
+                        {
+                            using namespace boost::lambda;
+                            vector<Node_ptr>::iterator new_end = 
+                                remove_if(cur_genes.begin(),
+                                          cur_genes.end(),
+                                          &*_1 ->* &Node::stree_label == cur_snode);
+                            cur_genes.erase(new_end, cur_genes.end());
+
+                            swap(slice[idx], slice.back());
+                            slice.pop_back();
+                        }
+                    else
+                        {
+                            speciate(stree, slice, idx, cur_genes);
+                        }
                 }
         }
 
     if (gtree_root == 0)
         {
             cerr << PROG_NAME << ": "
-                 << "gene went extinct during the process.\n";
+                 << ": The gene became extinct during all "
+                 << max_attempts << " runs of the process\n";
             exit(EXIT_FAILURE);
         }
 
@@ -452,8 +473,15 @@ advance_process(double time,
         {
             /* When is the next event? */
             double total_rate = cur_genes.size() * (delta + tau + mu);
-            boost::exponential_distribution<double> rng_exp(total_rate);
-            time -= rng_exp(g_rng_d);
+            if (total_rate > 0)
+                {
+                    boost::exponential_distribution<double> rng_exp(total_rate);
+                    time -= rng_exp(g_rng_d);
+                }
+            else
+                {
+                    time = 0;
+                }
             if (time <= 0)
                 break;
 

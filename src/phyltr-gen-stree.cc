@@ -50,16 +50,15 @@ struct Node {
 const string PROG_NAME = "phyltr-gen-stree";
 const string USAGE = "Usage: " + PROG_NAME +
     " [OPTION]... TIME BIRTH-RATE DEATH-RATE";
-
-boost::program_options::variables_map g_options;
-
-const int MAX_ATTEMPTS = 1000000;       // The maximum number of times the
-                                        // process will be run if the
-                                        // species goes extinct.
 const unsigned LENGTH_PRECISION = 3;    // The precision with which
                                         // times on the trees will be
                                         // printed.
 
+boost::program_options::variables_map g_options;
+
+unsigned max_attempts = 1000000;             // The maximum number of times the
+                                        // process will be run if the
+                                        // species goes extinct.
 //=============================================================================
 //                        Function declarations
 //=============================================================================
@@ -104,7 +103,11 @@ main(int argc, char *argv[])
             visible_opts.add_options()
                 ("help,h", "display this help and exit")
                 ("start-with-speciation,s",
-                 "If set, the birth-death process starts with a speciation");
+                 "If set, the birth-death process starts with a speciation")
+                ("max-attempts,a",
+                 po::value<unsigned>(&max_attempts)->default_value(10000),
+                 "The maximum number of times the process will run if the "
+                 "species goes extinct during.")
                 ;
             
             /* Declare positional options. */
@@ -155,6 +158,14 @@ main(int argc, char *argv[])
             exit(EXIT_FAILURE);
         }
 
+    /* Check that max_attempt is not zero. */
+    if (g_options["max-attempts"].as<unsigned>() == 0)
+        {
+            cerr << PROG_NAME << ": "
+                 << "max-attempts was set to zero.\n";
+            exit(EXIT_FAILURE);
+        }
+
     /* Check that the rates and time are non-negative. */
     if (lambda < 0 || mu < 0)
         {
@@ -179,7 +190,7 @@ main(int argc, char *argv[])
     vector<Node_ptr> leaves;    // The current set of leaves at cur_time.
     Node_ptr root(new Node(T, null, null, null));
 
-    int attempts = MAX_ATTEMPTS;
+    int attempts = max_attempts;
     while (leaves.size() == 0 && attempts--)
         {
             /*
@@ -215,9 +226,16 @@ main(int argc, char *argv[])
                     double birth = lambda * leaves.size();
                     double death = mu * leaves.size();
 
-                    boost::exponential_distribution<double> rng_exp(birth + death);
-                    double elapsed_time = rng_exp(g_rng_d);
-                    cur_time = min(cur_time + elapsed_time, T);
+                    if (birth + death > 0)
+                        {
+                            boost::exponential_distribution<double> rng_exp(birth + death);
+                            double elapsed_time = rng_exp(g_rng_d);
+                            cur_time = min(cur_time + elapsed_time, T);
+                        }
+                    else
+                        {
+                            cur_time = T;
+                        }
 
                     /* If elapsed time continued passed T, we are done. */
                     if (cur_time == T)
@@ -266,7 +284,7 @@ main(int argc, char *argv[])
         {
             cerr << PROG_NAME
                  << ": The species became extinct during all "
-                 << MAX_ATTEMPTS << " runs of the process\n";
+                 << max_attempts << " runs of the process\n";
             exit(EXIT_FAILURE);
         }
     
@@ -289,7 +307,7 @@ unsigned print_tree_r(Node_ptr node, unsigned next_leaf_id, bool output_lengths)
 void
 print_tree(Node_ptr root, bool output_lengths)
 {
-    unsigned next_leaf_id = 0;
+    unsigned next_leaf_id = 1;
     /* if node is a leaf. */
     if (!root->left)
         {
