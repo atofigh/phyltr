@@ -21,6 +21,7 @@ extern "C" {
 #include <boost/dynamic_bitset.hpp>
 #include <boost/foreach.hpp>
 #include <boost/concept_check.hpp>
+#include <boost/lambda/lambda.hpp>
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
@@ -38,6 +39,7 @@ extern "C" {
 //============================================================================
 
 using namespace  std;
+using namespace  boost::lambda;
 using            boost::multi_array;
 using            boost::dynamic_bitset;
 
@@ -230,7 +232,7 @@ main(int argc, char *argv[])
     try
         {
             visible_opts.add_options()
-                ("help", "display this help and exit")
+                ("help,h", "display this help and exit")
                 ("transfer-cost,t",
                  po::value<Cost_type>(&g_program_input.transfer_cost)
                  ->default_value(1.0),
@@ -243,6 +245,9 @@ main(int argc, char *argv[])
                  po::bool_switch(&g_program_input.cost_only)
                  ->default_value(false),
                  "If set, only the optimum cost is printed")
+                ("minimum-transfers,m",
+                 "If set, only the scenarios with minimum number "
+                 "of transfers are printed")
                 ;
             
             /* Declare positional options. */
@@ -420,10 +425,41 @@ main(int argc, char *argv[])
             return EXIT_SUCCESS;
         }
 
+    const Tree_type &G = g_program_input.gene_tree;
+    const Tree_type &S = g_program_input.species_tree;
+
     /*
-     * Backtrack and output all scenarios. We should do this
-     * xml-style.
+     * Backtrack and output all scenarios. 
      */
+    for (vid_t u = G.postorder_begin();
+         u != G.NONE;
+         u = G.postorder_next(u))
+        {
+            if (u == 0 || u == 1 || u == 2)
+                continue;
+
+            for (vid_t x = S.postorder_begin();
+                 x != S.NONE;
+                 x = S.postorder_next(x))
+                {
+                    backtrack_scenarios_below(u, x);
+                }
+
+            if (!G.is_leaf(u))
+                {
+                    vid_t v = G.left(u);
+                    vid_t w = G.right(u);
+
+                    for (vid_t y = 0; y < S.size(); ++y)
+                        {
+                            vector<Scenario>().swap(g_below[v][y].scenarios_below);
+                            vector<Scenario>().swap(g_below[v][y].scenarios_at);
+                            vector<Scenario>().swap(g_below[w][y].scenarios_below);
+                            vector<Scenario>().swap(g_below[w][y].scenarios_at);
+                        }
+                }
+        }
+
     backtrack_scenarios_below(0, 0);
 
     vector<Scenario> &scenarios = g_below[0][0].scenarios_below;
@@ -432,9 +468,6 @@ main(int argc, char *argv[])
      * Switch to using the postorder numbering of vertices in the
      * scenarios.
      */
-    const Tree_type &G = g_program_input.gene_tree;
-    const Tree_type &S = g_program_input.species_tree;
-
     vector<vid_t> gene_tree_numbering(G.size());
     vector<vid_t> species_tree_numbering(S.size());
     get_postorder_numbering(G, gene_tree_numbering);
@@ -462,9 +495,16 @@ main(int argc, char *argv[])
 
     sort(scenarios.begin(), scenarios.end());
 
-    cout << "Number of scenarios: " << scenarios.size() << "\n\n";
+    unsigned min_transfers = scenarios[0].transfer_edges.count();
     BOOST_FOREACH(const Scenario &sc, scenarios)
         {
+            if (g_program_options.count("minimum-transfers") &&
+                sc.transfer_edges.count() > min_transfers)
+                {
+                    break;
+                }
+                
+
             cout << "Transfer edges:\t";
             for (unsigned j = sc.transfer_edges.find_first();
                  j != sc.transfer_edges.npos; j = sc.transfer_edges.find_next(j))
@@ -480,7 +520,6 @@ main(int argc, char *argv[])
                 }
             cout << "\n\n";
         }
-    
 
     return EXIT_SUCCESS;
 }
@@ -493,13 +532,14 @@ main(int argc, char *argv[])
  * combine_scenarios()
  *
  * Combines each scenarios in one sequence with each scenario in
- * another sequence and outputs the result to the output iterator
- * 'out'. This function is a helper function used during backtracking.
+ * another sequence and, if the cost of the new scenario is equal to
+ * 'cost', outputs the result to the output iterator 'out'. This
+ * function is a helper function used during backtracking.
  */
 template<typename Initer1, typename Initer2, typename Outiter>
 void combine_scenarios(Initer1 begin1, Initer1 end1,
                        Initer2 begin2, Initer2 end2,
-                       Outiter out);
+                       Outiter out, Cost_type cost);
 
 /*
  * backtrack_scenarios_at()
@@ -597,7 +637,9 @@ dp_algorithm()
                 }
 
             /* Now compute g_outside[u][*]. */
-            
+
+            /* Note that g_outside[u][root of S] is always infinity
+               and is already done. */
             for (vid_t x = S.preorder_begin();
                  x != S.NONE;
                  x = S.preorder_next(x))
@@ -644,7 +686,7 @@ template<typename Initer1, typename Initer2, typename Outiter>
 void
 combine_scenarios(Initer1 begin1, Initer1 end1,
                   Initer2 begin2, Initer2 end2,
-                  Outiter out)
+                  Outiter out, Cost_type cost)
 {
     boost::function_requires< boost::InputIteratorConcept<Initer1> >();
     boost::function_requires< boost::InputIteratorConcept<Initer2> >();
@@ -652,17 +694,22 @@ combine_scenarios(Initer1 begin1, Initer1 end1,
 
     if (begin1 == end1 || begin2 == end2)
         return;
-
+    
     unsigned size = begin1->duplications.size();
+    unsigned total = 0;
 
     for (Initer1 i = begin1; i != end1; ++i)
         {
             for (Initer2 j = begin2; j != end2; ++j)
                 {
-                    Scenario sc(size);
-                    sc.duplications = i->duplications | j->duplications;
-                    sc.transfer_edges = i->transfer_edges | j->transfer_edges;
-                    *out++ = sc;
+                    if (i->cost() + j->cost() == cost)
+                        {
+                            Scenario sc(size);
+                            sc.duplications = i->duplications | j->duplications;
+                            sc.transfer_edges = i->transfer_edges | j->transfer_edges;
+                            *out++ = sc;
+                            total++;
+                        }
                 }
         }
 }
@@ -765,6 +812,20 @@ backtrack_scenarios_below(vid_t u, vid_t x)
                          back_inserter(scenarios));
                 }
         }
+    
+    if (!scenarios.empty() && g_program_options.count("minimum-transfers"))
+        {
+            sort(scenarios.begin(), scenarios.end());
+            unsigned min_transfers = scenarios.begin()->transfer_edges.count();
+            vector<Scenario>::iterator i;
+            for (i = scenarios.begin(); i != scenarios.end(); ++i)
+                {
+                    if (i->transfer_edges.count() > min_transfers)
+                        break;
+                }
+            scenarios.erase(i, scenarios.end());
+        }
+
     g_below[u][x].scenarios_below_computed = true;
 }
 
@@ -828,6 +889,19 @@ backtrack_scenarios_at(vid_t u, vid_t x)
             backtrack_duplication_at(u_left, u_right, x);
         }
     g_below[u][x].scenarios_at_computed = true;
+
+    if (!scenarios.empty() && g_program_options.count("minimum-transfers"))
+        {
+            sort(scenarios.begin(), scenarios.end());
+            unsigned min_transfers = scenarios.begin()->transfer_edges.count();
+            vector<Scenario>::iterator i;
+            for (i = scenarios.begin(); i != scenarios.end(); ++i)
+                {
+                    if (i->transfer_edges.count() > min_transfers)
+                        break;
+                }
+            scenarios.erase(i, scenarios.end());
+        }
 }
 
 void
@@ -854,7 +928,8 @@ backtrack_speciation_at(vid_t left, vid_t right, vid_t x)
 
     combine_scenarios(left_scenarios.begin(), left_scenarios.end(),
                       right_scenarios.begin(), right_scenarios.end(),
-                      back_inserter(g_below[G.parent(left)][x].scenarios_at));
+                      back_inserter(g_below[G.parent(left)][x].scenarios_at),
+                      g_below[G.parent(left)][x].cost);
 }
 
 void
@@ -871,54 +946,127 @@ backtrack_duplication_at(vid_t v, vid_t w, vid_t x)
 
     vector<Scenario> all;
 
-    backtrack_scenarios_at(v, x);
-    backtrack_scenarios_at(w, x);
-    combine_scenarios(g_below[v][x].scenarios_at.begin(),
-                      g_below[v][x].scenarios_at.end(),
-                      g_below[w][x].scenarios_at.begin(),
-                      g_below[w][x].scenarios_at.end(),
-                      back_inserter(all));
-
-    if (!S.is_leaf(x))
+    if (S.is_leaf(x))
         {
-            vid_t y = S.left(x);
-            vid_t z = S.right(x);
-
-            backtrack_scenarios_below(w, y);
-            backtrack_scenarios_below(w, z);
             backtrack_scenarios_at(v, x);
-            combine_scenarios(g_below[w][y].scenarios_below.begin(),
-                              g_below[w][y].scenarios_below.end(),
-                              g_below[v][x].scenarios_at.begin(),
-                              g_below[v][x].scenarios_at.end(),
-                              back_inserter(all));
-            combine_scenarios(g_below[w][z].scenarios_below.begin(),
-                              g_below[w][z].scenarios_below.end(),
-                              g_below[v][x].scenarios_at.begin(),
-                              g_below[v][x].scenarios_at.end(),
-                              back_inserter(all));
-
-            backtrack_scenarios_below(v, y);
-            backtrack_scenarios_below(v, z);
             backtrack_scenarios_at(w, x);
-            combine_scenarios(g_below[v][y].scenarios_below.begin(),
-                              g_below[v][y].scenarios_below.end(),
+            combine_scenarios(g_below[v][x].scenarios_at.begin(),
+                              g_below[v][x].scenarios_at.end(),
                               g_below[w][x].scenarios_at.begin(),
                               g_below[w][x].scenarios_at.end(),
-                              back_inserter(all));
-            combine_scenarios(g_below[v][z].scenarios_below.begin(),
-                              g_below[v][z].scenarios_below.end(),
-                              g_below[w][x].scenarios_at.begin(),
-                              g_below[w][x].scenarios_at.end(),
-                              back_inserter(all));
+                              back_inserter(all),
+                              g_below[u][x].cost - 1);
         }
+    else if (G.is_leaf(v))
+        {
+            backtrack_scenarios_below(v, x);
+            backtrack_scenarios_at(w, x);
+            combine_scenarios(g_below[v][x].scenarios_below.begin(),
+                              g_below[v][x].scenarios_below.end(),
+                              g_below[w][x].scenarios_at.begin(),
+                              g_below[w][x].scenarios_at.end(),
+                              back_inserter(all),
+                              g_below[u][x].cost - 1);
+        }
+    else if (G.is_leaf(w))
+        {
+            backtrack_scenarios_below(w, x);
+            backtrack_scenarios_at(v, x);
+            combine_scenarios(g_below[w][x].scenarios_below.begin(),
+                              g_below[w][x].scenarios_below.end(),
+                              g_below[v][x].scenarios_at.begin(),
+                              g_below[v][x].scenarios_at.end(),
+                              back_inserter(all),
+                              g_below[u][x].cost - 1);
+        }
+    else
+        {
+            if (g_below[v][x].events[Below::S] ||
+                g_below[v][x].events[Below::S_REV] ||
+                g_below[v][x].events[Below::T_LEFT] ||
+                g_below[v][x].events[Below::T_RIGHT] ||
+                g_below[v][x].events[Below::D])
+                {
+                    backtrack_scenarios_at(v, x);
+                    if (g_below[w][x].events[Below::S] ||
+                        g_below[w][x].events[Below::S_REV] ||
+                        g_below[w][x].events[Below::T_LEFT] ||
+                        g_below[w][x].events[Below::T_RIGHT] ||
+                        g_below[w][x].events[Below::D])
+                        {
+                            backtrack_scenarios_at(w, x);
+                            combine_scenarios(g_below[v][x].scenarios_at.begin(),
+                                              g_below[v][x].scenarios_at.end(),
+                                              g_below[w][x].scenarios_at.begin(),
+                                              g_below[w][x].scenarios_at.end(),
+                                              back_inserter(all),
+                                              g_below[u][x].cost - 1);
+                        }
+                    if (!S.is_leaf(x))
+                        {
+                            vid_t y = S.left(x);
+                            vid_t z = S.right(x);
+                            if (g_below[w][x].events[Below::B_LEFT])
+                                {
+                                    backtrack_scenarios_below(w, y);
+                                    combine_scenarios(g_below[w][y].scenarios_below.begin(),
+                                                      g_below[w][y].scenarios_below.end(),
+                                                      g_below[v][x].scenarios_at.begin(),
+                                                      g_below[v][x].scenarios_at.end(),
+                                                      back_inserter(all),
+                                                      g_below[u][x].cost -1);
+                                }
+                            if (g_below[w][x].events[Below::B_RIGHT])
+                                {
+                                    backtrack_scenarios_below(w, z);
+                                    combine_scenarios(g_below[w][z].scenarios_below.begin(),
+                                                      g_below[w][z].scenarios_below.end(),
+                                                      g_below[v][x].scenarios_at.begin(),
+                                                      g_below[v][x].scenarios_at.end(),
+                                                      back_inserter(all),
+                                                      g_below[u][x].cost -1);
+                                }
+                        }
+                }
+            if (g_below[w][x].events[Below::S] ||
+                g_below[w][x].events[Below::S_REV] ||
+                g_below[w][x].events[Below::T_LEFT] ||
+                g_below[w][x].events[Below::T_RIGHT] ||
+                g_below[w][x].events[Below::D])
+                {
+                    backtrack_scenarios_at(w, x);
+                    if (!S.is_leaf(x))
+                        {
+                            vid_t y = S.left(x);
+                            vid_t z = S.right(x);
+                            if (g_below[v][x].events[Below::B_LEFT])
+                                {
+                                    backtrack_scenarios_below(v, y);
+                                    combine_scenarios(g_below[v][y].scenarios_below.begin(),
+                                                      g_below[v][y].scenarios_below.end(),
+                                                      g_below[w][x].scenarios_at.begin(),
+                                                      g_below[w][x].scenarios_at.end(),
+                                                      back_inserter(all),
+                                                      g_below[u][x].cost -1);
+                                }
+                            if (g_below[v][x].events[Below::B_RIGHT])
+                                {
+                                    backtrack_scenarios_below(v, z);
+                                    combine_scenarios(g_below[v][z].scenarios_below.begin(),
+                                                      g_below[v][z].scenarios_below.end(),
+                                                      g_below[w][x].scenarios_at.begin(),
+                                                      g_below[w][x].scenarios_at.end(),
+                                                      back_inserter(all),
+                                                      g_below[u][x].cost -1);
+                                }
+                        }
+                }
+        }
+
     for (unsigned i = 0; i < all.size(); ++i)
         {
             all[i].duplications.set(u);
-            if (all[i].cost() == g_below[u][x].cost)
-                {
-                    g_below[u][x].scenarios_at.push_back(all[i]);
-                }
+            g_below[u][x].scenarios_at.push_back(all[i]);
         }
 }
 
@@ -949,7 +1097,8 @@ backtrack_transfer_at(vid_t u_at, vid_t u_outside, vid_t x)
                               g_below[u_outside][*i].scenarios_below.end(),
                               g_below[u_at][x].scenarios_at.begin(),
                               g_below[u_at][x].scenarios_at.end(),
-                              back_inserter(all));
+                              back_inserter(all),
+                              g_below[G.parent(u_at)][x].cost -1);
         }
     for (unsigned j = 0; j < all.size(); ++j)
         {

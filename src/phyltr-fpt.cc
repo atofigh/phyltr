@@ -856,7 +856,6 @@ main(int argc, char *argv[])
         }
 
     sort(solutions.begin(), solutions.end(), (*_1) < (*_2));
-    cout << "Number of scenarios: " << solutions.size() << "\n\n";
 
     BOOST_FOREACH(Candidate_ptr cp, solutions)
         {
