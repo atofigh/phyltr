@@ -135,16 +135,6 @@ template<typename OutputIterator>
 void fpt_algorithm_simple(OutputIterator solutions);
 
 /*
- * compute_lambda()
- *
- * Computes the least common ancestor mapping of the gene tree into
- * the species tree given a candidate, and stores the result in the
- * vector 'lambda'. The size of 'lambda' must be at least
- * g_program_input.gene_tree.size().
- */
-void compute_lambda(const Candidate &c, vector<vid_t> &lambda);
-
-/*
  * compute_highest_mapping()
  *
  * Given a candidate 'c', and precomputed 'lambda', computes the
@@ -194,42 +184,6 @@ void find_comapped_vertices(vid_t u,
 //=============================================================================
 //         Template and inline function and member definitions.
 //=============================================================================
-
-void 
-compute_lambda(const Candidate &c, vector<vid_t> &lambda)
-{
-    const Tree_type &G = g_program_input.gene_tree;
-    const Tree_type &S = g_program_input.species_tree;
-    const vector<vid_t> &sigma = g_program_input.sigma;
-
-    for (vid_t u = G.postorder_begin(); 
-         u != Tree_type::NONE; 
-         u = G.postorder_next(u))
-        {
-            /* Take care of gene tree leaves and continue. */
-            if (G.is_leaf(u))
-                {
-                    lambda[u] = sigma[u];
-                    continue;
-                }
-            
-            vid_t v = G.left(u);
-            vid_t w = G.right(u);
-            
-            if (c.is_transfer_edge(v))
-                {
-                    lambda[u] = lambda[w];
-                }
-            else if (c.is_transfer_edge(w))
-                {
-                    lambda[u] = lambda[v];
-                }
-            else
-                {
-                    lambda[u] = S.lca(lambda[w], lambda[v]);
-                }
-        }
-}
 
 void 
 compute_highest_mapping(const Candidate &c,
@@ -484,7 +438,7 @@ fpt_algorithm_simple(OutputIterator solutions)
         {
             Candidate_ptr c1 = Q.top(); Q.pop();
             
-            compute_lambda(*c1, lambda);
+            compute_lambda(S, G, g_program_input.sigma, c1->transfer_edges, lambda);
 
             vid_t u = find_unresolved(*c1, lambda);
             if (u == Tree_type::NONE) /* Nothing more to do for candidate. */
@@ -874,7 +828,21 @@ main(int argc, char *argv[])
                 {
                     cout << j << " ";
                 }
-            cout << "\n\n";
+            cout << "\n";
+            // Get old transfer edges.
+            dynamic_bitset<> old_transfer_edges(cp->transfer_edges);
+            vector<vid_t> inv_numbering(gene_tree_numbering);
+            for (unsigned i = 0; i < gene_tree_numbering.size(); ++i)
+                {
+                    inv_numbering[gene_tree_numbering[i]] = i;
+                }
+            for (unsigned i = 0; i < G.size(); ++i)
+                {
+                    old_transfer_edges[i] = cp->transfer_edges[gene_tree_numbering[i]];
+                }
+            cout << "Number of losses: "
+                 << count_losses(S, G, g_program_input.sigma, old_transfer_edges)
+                 << "\n\n";
         }
     
     return EXIT_SUCCESS;

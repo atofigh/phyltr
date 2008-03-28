@@ -518,7 +518,22 @@ main(int argc, char *argv[])
                 {
                     cout << j << " ";
                 }
-            cout << "\n\n";
+            cout << "\n";
+            // Get old transfer edges.
+            dynamic_bitset<> old_transfer_edges(sc.transfer_edges);
+            vector<vid_t> inv_numbering(gene_tree_numbering);
+            for (unsigned i = 0; i < gene_tree_numbering.size(); ++i)
+                {
+                    inv_numbering[gene_tree_numbering[i]] = i;
+                }
+            for (unsigned i = 0; i < G.size(); ++i)
+                {
+                    old_transfer_edges[i] = sc.transfer_edges[gene_tree_numbering[i]];
+                }
+
+            cout << "Number of losses: "
+                 << count_losses(S, G, g_program_input.sigma, old_transfer_edges)
+                 << "\n\n";
         }
 
     return EXIT_SUCCESS;

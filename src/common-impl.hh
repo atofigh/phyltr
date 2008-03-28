@@ -153,4 +153,78 @@ init_rand(RandomNumberGenerator &engine, unsigned seed)
 }
 
 
+template<typename T>
+void compute_lambda(const Binary_tree<T> &S,
+                    const Binary_tree<T> &G,
+                    const std::vector<typename Binary_tree<T>::vid_t> &sigma,
+                    const boost::dynamic_bitset<> &transfer_edges,
+                    std::vector<typename Binary_tree<T>::vid_t> &lambda)
+{
+    typedef Binary_tree<T> Tree_type;
+    typedef typename Tree_type::vid_t vid_t;
+
+    lambda.resize(G.size());
+    for (vid_t u = G.postorder_begin(); 
+         u != Tree_type::NONE; 
+         u = G.postorder_next(u))
+        {
+            /* Take care of gene tree leaves and continue. */
+            if (G.is_leaf(u))
+                {
+                    lambda[u] = sigma[u];
+                    continue;
+                }
+            
+            vid_t v = G.left(u);
+            vid_t w = G.right(u);
+            
+            if (transfer_edges[v])
+                {
+                    lambda[u] = lambda[w];
+                }
+            else if (transfer_edges[w])
+                {
+                    lambda[u] = lambda[v];
+                }
+            else
+                {
+                    lambda[u] = S.lca(lambda[w], lambda[v]);
+                }
+        }
+}
+
+template<typename T>
+int count_losses(const Binary_tree<T> &S,
+                 const Binary_tree<T> &G,
+                 const std::vector<typename Binary_tree<T>::vid_t> &sigma,
+                 const boost::dynamic_bitset<> &transfer_edges)
+{
+    typedef Binary_tree<T> Tree_type;
+    typedef typename Binary_tree<T>::vid_t vid_t;
+
+    // Compute lambda
+    std::vector<vid_t> lambda;
+    compute_lambda(S, G, sigma, transfer_edges, lambda);
+
+    // For each non-transfer edge (u, v) in G, count the number of
+    // speciations that we pass from lambda(u) to lambda(v).
+    int losses = 0;
+    for (vid_t u = 1; u < G.size(); ++u)
+        {
+            vid_t p = G.parent(u);
+            if (transfer_edges[u] || lambda[p] == lambda[u])
+                continue;
+
+            vid_t x = S.parent(lambda[u]);
+            while (x != lambda[p])
+                {
+                    losses += 1;
+                    x = S.parent(x);
+                }
+        }
+    
+    return losses;
+}
+
+
 #endif /* COMMON_IMPL_HH */

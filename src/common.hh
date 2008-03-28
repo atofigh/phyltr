@@ -16,6 +16,7 @@ extern "C" {
 #include <iosfwd>
 #include <vector>
 #include <boost/random.hpp>
+#include <boost/dynamic_bitset.hpp>
 
 
 /*
@@ -61,6 +62,34 @@ void create_gene_species_map(const Binary_tree<T> &species_tree,
                              const Binary_tree<T> &gene_tree, 
                              std::string map_filename,
                              std::vector<typename Binary_tree<T>::vid_t> &sigma);
+
+/*
+ * compute_lambda()
+ *
+ * Computes the least common ancestor mapping of the gene tree into
+ * the species tree given a transfer edges, and stores the result in
+ * the vector 'lambda'. The size of 'lambda' is adjusted by the
+ * function to the size of the gene tree.
+ */
+template<typename T>
+void compute_lambda(const Binary_tree<T> &species_tree,
+                    const Binary_tree<T> &gene_tree,
+                    const std::vector<typename Binary_tree<T>::vid_t> &sigma,
+                    const boost::dynamic_bitset<> &transfer_edges,
+                    std::vector<typename Binary_tree<T>::vid_t> &lambda);
+
+
+/*
+ * count_losses()
+ *
+ * computes the number of losses given a species tree, gene tree, and
+ * a set of transfer edges.
+ */
+template<typename T>
+int count_losses(const Binary_tree<T> &species_tree,
+                 const Binary_tree<T> &gene_tree,
+                 const std::vector<typename Binary_tree<T>::vid_t> &sigma,
+                 const boost::dynamic_bitset<> &transfer_edges);
 
 /*
  * get_postorder_numbering()
