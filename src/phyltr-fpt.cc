@@ -88,13 +88,15 @@ struct Candidate {
  * the program and should be accessible by all source files.
  */
 struct Program_input {
-    Tree_type      species_tree;
-    Tree_type      gene_tree;
-    vector<vid_t>  sigma;
-    Cost_type      duplication_cost;
-    Cost_type      transfer_cost;
-    Cost_type      min_cost;
-    Cost_type      max_cost;
+    Tree_type           species_tree;
+    Tree_type           gene_tree;
+    vector<vid_t>       sigma;
+    Cost_type           duplication_cost;
+    Cost_type           transfer_cost;
+    Cost_type           min_cost;
+    Cost_type           max_cost;
+    vector<unsigned>    gene_tree_numbering;
+    vector<unsigned>    species_tree_numbering;
 
     Program_input() : species_tree(), gene_tree(), sigma(),
                       duplication_cost(0), transfer_cost(0),
@@ -771,77 +773,57 @@ main(int argc, char *argv[])
             exit(EXIT_FAILURE);
         }
 
-    vector<Candidate_ptr> solutions;
-    fpt_algorithm_simple(back_inserter(solutions));
+    /*
+     * Compute the numbering of the vertices. We use postorder
+     * numbering in all the programs in the phyltr-package.
+     */
+    get_postorder_numbering(g_program_input.gene_tree,
+                            g_program_input.gene_tree_numbering);
+    get_postorder_numbering(g_program_input.species_tree,
+                            g_program_input.species_tree_numbering);
+    
 
     /*
-     * Switch to using the postorder numbering of vertices in the
-     * scenarios.
+     * Do the main task of the program and get all the solutions.
      */
-    const Tree_type &G = g_program_input.gene_tree;
-    const Tree_type &S = g_program_input.species_tree;
-
-    vector<vid_t> gene_tree_numbering(G.size());
-    vector<vid_t> species_tree_numbering(S.size());
-    get_postorder_numbering(G, gene_tree_numbering);
-    get_postorder_numbering(S, species_tree_numbering);
-
-    BOOST_FOREACH(Candidate_ptr cp, solutions)
-        {
-            dynamic_bitset<> new_duplications(cp->duplications.size());
-            dynamic_bitset<> new_transfers(cp->transfer_edges.size());
-            for (unsigned i = cp->duplications.find_first();
-                 i != dynamic_bitset<>::npos;
-                 i = cp->duplications.find_next(i))
-                {
-                    new_duplications.set(gene_tree_numbering[i]);
-                }
-            for (unsigned i = cp->transfer_edges.find_first();
-                 i != dynamic_bitset<>::npos;
-                 i = cp->transfer_edges.find_next(i))
-                {
-                    new_transfers.set(gene_tree_numbering[i]);
-                }
-            cp->duplications = new_duplications;
-            cp->transfer_edges = new_transfers;
-            // cp->set_final();
-            // We won't do set_final because the indices of the bitsets
-            // now do not correspond to vertex ids.
-        }
+    vector<Candidate_ptr> solutions;
+    fpt_algorithm_simple(back_inserter(solutions));
 
     sort(solutions.begin(), solutions.end(), (*_1) < (*_2));
 
     BOOST_FOREACH(Candidate_ptr cp, solutions)
         {
             cout << "Transfer edges:\t";
+            vector<vid_t> vertices;
             for (unsigned j = cp->transfer_edges.find_first();
                  j != dynamic_bitset<>::npos;
                  j = cp->transfer_edges.find_next(j))
                 {
-                    cout << j << " ";
+                    vertices.push_back(g_program_input.gene_tree_numbering[j]);
                 }
-            cout << '\n';
+            sort(vertices.begin(), vertices.end());
+            copy(vertices.begin(), vertices.end(),
+                 ostream_iterator<vid_t>(cout, " "));
+            cout << "\n";
+
             cout << "Duplications:\t";
+            vertices.clear();
             for (unsigned j = cp->duplications.find_first();
                  j != dynamic_bitset<>::npos;
                  j = cp->duplications.find_next(j))
                 {
-                    cout << j << " ";
+                    vertices.push_back(g_program_input.gene_tree_numbering[j]);
                 }
+            sort(vertices.begin(), vertices.end());
+            copy(vertices.begin(), vertices.end(),
+                 ostream_iterator<vid_t>(cout, " "));
             cout << "\n";
-            // Get old transfer edges.
-            dynamic_bitset<> old_transfer_edges(cp->transfer_edges);
-            vector<vid_t> inv_numbering(gene_tree_numbering);
-            for (unsigned i = 0; i < gene_tree_numbering.size(); ++i)
-                {
-                    inv_numbering[gene_tree_numbering[i]] = i;
-                }
-            for (unsigned i = 0; i < G.size(); ++i)
-                {
-                    old_transfer_edges[i] = cp->transfer_edges[gene_tree_numbering[i]];
-                }
+
             cout << "Number of losses: "
-                 << count_losses(S, G, g_program_input.sigma, old_transfer_edges)
+                 << count_losses(g_program_input.species_tree,
+                                 g_program_input.gene_tree,
+                                 g_program_input.sigma,
+                                 cp->transfer_edges)
                  << "\n\n";
         }
     
@@ -941,11 +923,9 @@ Candidate::cost() const
 bool
 Candidate::operator<(const Candidate &c) const
 {
-    /*
-     * This function must not depend on this->speciations, since the
-     * indices might not refer to vertex ids, but might rather
-     * correspond to preorder numbering.
-     */
+    const Tree_type &S = g_program_input.species_tree;
+    const Tree_type &G = g_program_input.gene_tree;
+    const vector<vid_t> &sigma = g_program_input.sigma;
     
     if (cost() < c.cost())
         return true;
@@ -955,9 +935,49 @@ Candidate::operator<(const Candidate &c) const
         return true;
     if (transfer_edges.count() > c.transfer_edges.count())
         return false;
-    if (transfer_edges < c.transfer_edges)
+
+    int my_losses = count_losses(S, G, sigma, transfer_edges);
+    int his_losses = count_losses(S, G, sigma, c.transfer_edges);
+
+    if (my_losses < his_losses)
         return true;
-    if (transfer_edges > c.transfer_edges)
+    if (my_losses > his_losses)
         return false;
-    return duplications < c.duplications;
+    
+    dynamic_bitset<> my_transfers(G.size());
+    dynamic_bitset<> his_transfers(G.size());
+    for (unsigned i = transfer_edges.find_first();
+         i != dynamic_bitset<>::npos;
+         i = transfer_edges.find_next(i))
+        {
+            my_transfers.set(g_program_input.gene_tree_numbering[i]);
+        }
+    for (unsigned i = c.transfer_edges.find_first();
+         i != dynamic_bitset<>::npos;
+         i = c.transfer_edges.find_next(i))
+        {
+            his_transfers.set(g_program_input.gene_tree_numbering[i]);
+        }
+
+    if (my_transfers < his_transfers)
+        return true;
+    if (my_transfers > his_transfers)
+        return false;
+
+    dynamic_bitset<> my_duplications(G.size());
+    dynamic_bitset<> his_duplications(G.size());
+    for (unsigned i = duplications.find_first();
+         i != dynamic_bitset<>::npos;
+         i = duplications.find_next(i))
+        {
+            my_duplications.set(g_program_input.gene_tree_numbering[i]);
+        }
+    for (unsigned i = c.duplications.find_first();
+         i != dynamic_bitset<>::npos;
+         i = c.duplications.find_next(i))
+        {
+            his_duplications.set(g_program_input.gene_tree_numbering[i]);
+        }
+
+    return my_duplications < his_duplications;
 }

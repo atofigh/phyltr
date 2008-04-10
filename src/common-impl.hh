@@ -108,6 +108,8 @@ get_postorder_numbering(const Binary_tree<T> &tree,
 {
     typedef typename Binary_tree<T>::vid_t vid_t;
     
+    numbering.resize(tree.size());
+
     unsigned i = 0;
     for (vid_t u = tree.postorder_begin();
          u != tree.NONE;

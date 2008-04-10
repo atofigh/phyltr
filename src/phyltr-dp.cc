@@ -151,12 +151,14 @@ struct Outside {
  * the program and should be accessible by all source files.
  */
 struct Program_input {
-    Tree_type      species_tree;
-    Tree_type      gene_tree;
-    vector<vid_t>  sigma;
-    Cost_type      duplication_cost;
-    Cost_type      transfer_cost;
-    bool           cost_only;
+    Tree_type           species_tree;
+    Tree_type           gene_tree;
+    vector<vid_t>       sigma;
+    Cost_type           duplication_cost;
+    Cost_type           transfer_cost;
+    bool                cost_only;
+    vector<unsigned>    gene_tree_numbering;
+    vector<unsigned>    species_tree_numbering;
 
     Program_input() : species_tree(), gene_tree(), sigma(),
                       duplication_cost(0), transfer_cost(0),
@@ -245,7 +247,7 @@ main(int argc, char *argv[])
                  po::bool_switch(&g_program_input.cost_only)
                  ->default_value(false),
                  "If set, only the optimum cost is printed")
-                ("minimum-transfers,m",
+                ("minimum-transfers",
                  "If set, only the scenarios with minimum number "
                  "of transfers are printed")
                 ;
@@ -406,7 +408,15 @@ main(int argc, char *argv[])
             cerr << PROG_NAME << ": duplication cost is too big";
             exit(EXIT_FAILURE);
         }
-    
+
+    /*
+     * Compute the numbering of the vertices. We use postorder
+     * numbering in all the programs in the phyltr-package.
+     */
+    get_postorder_numbering(g_program_input.gene_tree,
+                            g_program_input.gene_tree_numbering);
+    get_postorder_numbering(g_program_input.species_tree,
+                            g_program_input.species_tree_numbering);
     
     /* Create the below and outside matrices. */
       
@@ -427,6 +437,7 @@ main(int argc, char *argv[])
 
     const Tree_type &G = g_program_input.gene_tree;
     const Tree_type &S = g_program_input.species_tree;
+    const vector<vid_t> &sigma = g_program_input.sigma;
 
     /*
      * Backtrack and output all scenarios. 
@@ -464,35 +475,6 @@ main(int argc, char *argv[])
 
     vector<Scenario> &scenarios = g_below[0][0].scenarios_below;
 
-    /*
-     * Switch to using the postorder numbering of vertices in the
-     * scenarios.
-     */
-    vector<vid_t> gene_tree_numbering(G.size());
-    vector<vid_t> species_tree_numbering(S.size());
-    get_postorder_numbering(G, gene_tree_numbering);
-    get_postorder_numbering(S, species_tree_numbering);
-
-    BOOST_FOREACH(Scenario &sc, scenarios)
-        {
-            dynamic_bitset<> new_duplications(sc.duplications.size());
-            dynamic_bitset<> new_transfers(sc.transfer_edges.size());
-            for (unsigned i = sc.duplications.find_first();
-                 i != sc.duplications.npos;
-                 i = sc.duplications.find_next(i))
-                {
-                    new_duplications.set(gene_tree_numbering[i]);
-                }
-            for (unsigned i = sc.transfer_edges.find_first();
-                 i != sc.transfer_edges.npos;
-                 i = sc.transfer_edges.find_next(i))
-                {
-                    new_transfers.set(gene_tree_numbering[i]);
-                }
-            sc.duplications = new_duplications;
-            sc.transfer_edges = new_transfers;
-        }
-
     sort(scenarios.begin(), scenarios.end());
 
     unsigned min_transfers = scenarios[0].transfer_edges.count();
@@ -504,36 +486,39 @@ main(int argc, char *argv[])
                     break;
                 }
                 
-
             cout << "Transfer edges:\t";
-            for (unsigned j = sc.transfer_edges.find_first();
-                 j != sc.transfer_edges.npos; j = sc.transfer_edges.find_next(j))
+            vector<bool> transfers(G.size());
+            for (vid_t u = 0; u < G.size(); ++u)
                 {
-                    cout << j << " ";
+                    if (sc.transfer_edges[u])
+                        transfers[g_program_input.gene_tree_numbering[u]] = true;
                 }
-            cout << '\n';
-            cout << "Duplications:\t";
-            for (unsigned j = sc.duplications.find_first();
-                 j != sc.duplications.npos; j = sc.duplications.find_next(j))
+            for (unsigned i = 0; i < transfers.size(); ++i)
                 {
-                    cout << j << " ";
+                    if (transfers[i])
+                        cout << i << " ";
                 }
             cout << "\n";
-            // Get old transfer edges.
-            dynamic_bitset<> old_transfer_edges(sc.transfer_edges);
-            vector<vid_t> inv_numbering(gene_tree_numbering);
-            for (unsigned i = 0; i < gene_tree_numbering.size(); ++i)
+
+            cout << "Duplications:\t";
+            vector<bool> duplications(G.size());
+            for (vid_t u = 0; u < G.size(); ++u)
                 {
-                    inv_numbering[gene_tree_numbering[i]] = i;
+                    if (sc.duplications[u])
+                        duplications[g_program_input.gene_tree_numbering[u]] = true;
                 }
-            for (unsigned i = 0; i < G.size(); ++i)
+            for (unsigned i = 0; i < duplications.size(); ++i)
                 {
-                    old_transfer_edges[i] = sc.transfer_edges[gene_tree_numbering[i]];
+                    if (duplications[i])
+                        cout << i << " ";
                 }
+            cout << "\n";
 
             cout << "Number of losses: "
-                 << count_losses(S, G, g_program_input.sigma, old_transfer_edges)
-                 << "\n\n";
+                 << count_losses(S, G, sigma, sc.transfer_edges)
+                 << "\n";
+            
+            cout << "\n";
         }
 
     return EXIT_SUCCESS;
@@ -747,6 +732,10 @@ Scenario::cost() const
 bool
 Scenario::operator<(const Scenario &sc) const
 {
+    const Tree_type &S = g_program_input.species_tree;
+    const Tree_type &G = g_program_input.gene_tree;
+    const vector<vid_t> &sigma = g_program_input.sigma;
+
     if (cost() < sc.cost())
         return true;
     if (cost() > sc.cost())
@@ -755,11 +744,51 @@ Scenario::operator<(const Scenario &sc) const
         return true;
     if (transfer_edges.count() > sc.transfer_edges.count())
         return false;
-    if (transfer_edges < sc.transfer_edges)
+
+    int my_losses = count_losses(S, G, sigma, transfer_edges);
+    int his_losses = count_losses(S, G, sigma, sc.transfer_edges);
+
+    if (my_losses < his_losses)
         return true;
-    if (transfer_edges > sc.transfer_edges)
+    if (my_losses > his_losses)
         return false;
-    return duplications < sc.duplications;
+
+    dynamic_bitset<> my_transfers(G.size());
+    dynamic_bitset<> his_transfers(G.size());
+    for (unsigned i = transfer_edges.find_first();
+         i != dynamic_bitset<>::npos;
+         i = transfer_edges.find_next(i))
+        {
+            my_transfers.set(g_program_input.gene_tree_numbering[i]);
+        }
+    for (unsigned i = sc.transfer_edges.find_first();
+         i != dynamic_bitset<>::npos;
+         i = sc.transfer_edges.find_next(i))
+        {
+            his_transfers.set(g_program_input.gene_tree_numbering[i]);
+        }
+
+    if (my_transfers < his_transfers)
+        return true;
+    if (my_transfers > his_transfers)
+        return false;
+
+    dynamic_bitset<> my_duplications(G.size());
+    dynamic_bitset<> his_duplications(G.size());
+    for (unsigned i = duplications.find_first();
+         i != dynamic_bitset<>::npos;
+         i = duplications.find_next(i))
+        {
+            my_duplications.set(g_program_input.gene_tree_numbering[i]);
+        }
+    for (unsigned i = sc.duplications.find_first();
+         i != dynamic_bitset<>::npos;
+         i = sc.duplications.find_next(i))
+        {
+            his_duplications.set(g_program_input.gene_tree_numbering[i]);
+        }
+
+    return my_duplications < his_duplications;
 }
 
 // Below constructor

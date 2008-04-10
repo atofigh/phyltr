@@ -95,9 +95,9 @@ int count_losses(const Binary_tree<T> &species_tree,
  * get_postorder_numbering()
  *
  * Provides a postorder numbering of the vertices in 'tree'. The size
- * of the vector 'numbering' must be at least 'tree.size()'. After a
- * call to this function, numbering[v] is the postorder number of
- * vertex v.
+ * of the vector 'numbering' will be 'tree.size()' after the
+ * call. After a call to this function, numbering[v] is the postorder
+ * number of vertex v.
  */
 template<typename T>
 void get_postorder_numbering(const Binary_tree<T> &tree,

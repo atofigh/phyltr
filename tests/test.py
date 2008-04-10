@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 
-import sys
-import os
+import sys, os, tempfile
 
 sys.path.append('../scripts')
 
@@ -12,41 +11,61 @@ from phyltr import *
 
 print " Test: small random trees ".center(80, '=')
 
-for s_size in range(2, 10):
-    for g_size in range(s_size, 10):
-        (s, g, sigma) = create_random_input(s_size, g_size)
-        s_file = open("s", "w")
-        g_file = open("g", "w")
-        sigma_file = open("sigma", "w")
+s_file = tempfile.NamedTemporaryFile()
+g_file = tempfile.NamedTemporaryFile()
+sigma_file = tempfile.NamedTemporaryFile()
+res_dp_file = tempfile.NamedTemporaryFile()
+res_fpt_file = tempfile.NamedTemporaryFile()
 
-        print >> s_file, s + ";"
-        print >> g_file, g + ";"
-        for m in sigma:
-            print >> sigma_file, m[0], m[1]
+file_names = ' '.join([s_file.name, g_file.name, sigma_file.name])
 
-        s_file.close()
-        g_file.close()
-        sigma_file.close()
-            
-        infile = os.popen('../bin/phyltr-dp -c s g sigma', 'r')
+for i in range(10):
+    for s_size in range(2, 10):
+        for g_size in range(s_size, 10):
+            (s, g, sigma) = create_random_input(s_size, g_size)
+            s_file.truncate(0)
+            s_file.seek(0)
+            g_file.truncate(0)
+            g_file.seek(0)
+            sigma_file.truncate(0)
+            sigma_file.seek(0)
+            res_dp_file.truncate(0)
+            res_dp_file.seek(0)
+            res_fpt_file.truncate(0)
+            res_fpt_file.seek(0)
 
-        opt_cost = int(infile.read())
-        infile.close()
+            print >> s_file, s + ";"
+            print >> g_file, g + ";"
+            for m in sigma:
+                print >> sigma_file, m[0], m[1]
 
-        os.system("../bin/phyltr-dp s g sigma > res-dp")
-        os.system("../bin/phyltr-fpt s g sigma "
-                  + str(opt_cost) + " " + str(opt_cost) + " "
-                  + "> res-fpt")
+            s_file.flush()
+            g_file.flush()
+            sigma_file.flush()
 
-        diff = os.system("diff res-dp res-fpt")
-        if diff != 0:
-            raise RuntimeError, "Test Failed"
+            infile = os.popen('../bin/phyltr-dp -c ' + file_names, 'r')
+            opt_cost = int(infile.read())
+            infile.close()
+
+            infile = os.popen("../bin/phyltr-dp " + file_names)
+            res_dp_file.writelines(infile.readlines())
+            infile.close()
+            res_dp_file.flush()
+
+            infile = os.popen("../bin/phyltr-fpt " + file_names + " " +
+                              str(opt_cost) + " " + str(opt_cost))
+            res_fpt_file.writelines(infile.readlines())
+            infile.close()
+            res_fpt_file.flush()
+
+            diff = os.system("diff " +
+                             res_dp_file.name + " " +
+                             res_fpt_file.name)
+            if diff != 0:
+                raise RuntimeError, "Test Failed"
+    sys.stderr.write('.')
+print
 
 
 print " PASSED ".center(80, '=')
 
-os.remove("s")
-os.remove("g")
-os.remove("sigma")
-os.remove("res-dp")
-os.remove("res-fpt")
