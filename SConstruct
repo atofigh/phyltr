@@ -35,9 +35,14 @@ phyltr_gen_gtree = env.Program(target = 'bin/phyltr-gen-gtree',
                                source = ['build/phyltr-gen-gtree.cc'] + common_objs,
                                LIBS = ['NHparser', 'boost_program_options'])
 
-env.Default([phyltr_fpt, phyltr_dp, phyltr_gen_stree, phyltr_gen_gtree])
-
+# Declare a test target that runs the test script(s)
 test_target = env.Command('test', None, '@cd tests; python test.py')
-env.Clean([phyltr_dp, phyltr_fpt, phyltr_gen_stree],
-          Split('tests/s tests/g tests/sigma tests/res-fpt tests/res-dp scripts/phyltr.pyc'))
-env.Depends(test_target, [phyltr_dp, phyltr_fpt])
+if not env.GetOption('clean'):       # With this, phyltr-dp and phyltr-fpt are not removed when cleaning 'test'
+    env.Depends(test_target, [phyltr_dp, phyltr_fpt])
+
+
+env.Default([phyltr_fpt, phyltr_dp, phyltr_gen_stree, phyltr_gen_gtree, '_clean_dummy'])
+
+
+env.Clean(['_clean_dummy', test_target], 'scripts/phyltr.pyc')
+
