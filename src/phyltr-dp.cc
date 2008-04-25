@@ -1,13 +1,11 @@
-//=============================================================================
-// 
+//*****************************************************************************
 // phyltr-dp.cc
 //
 // Implementation of the dynamic programming algorithm for finding the
 // minimum cost of any DTL-scenario reconciling a species tree and a
 // gene tree. A backtracking algorithm is also implemented to find all
 // optimal DTL-scenarios.
-// 
-//=============================================================================
+//*****************************************************************************
 
 #include <exception>
 #include <iostream>
@@ -53,14 +51,13 @@ typedef float                   cost_type; // Instead of double to save memory.
 
 
 const string PROGRAM_NAME = "phyltr-dp";
-const string USAGE = 
+const string USAGE =
     "Usage: " + PROGRAM_NAME + " [OPTION]... SPECIES_TREE_FILE GENE_TREE_FILE "
     "MAP_FILE";
 
 
 
-//=============================================================================
-// 
+//*****************************************************************************
 // class Scenario
 //
 // A Scenario object is used to keep track of the duplications and
@@ -72,8 +69,7 @@ const string USAGE =
 // The operator< is used to sort the scenarios for printing. It sorts
 // first on the number of transfers, then on the number of losses, and
 // lastly according to lexicographic order.
-// 
-//=============================================================================
+//*****************************************************************************
 class Scenario {
 public:
     dynamic_bitset<> duplications;
@@ -87,7 +83,7 @@ ostream &operator<<(ostream &, const Scenario &);
 
 
 
-//=============================================================================
+//*****************************************************************************
 // class BacktrackElement
 //
 // Used to hold the information needed for backtracking after the
@@ -98,28 +94,28 @@ ostream &operator<<(ostream &, const Scenario &);
 // gene tree vertex and a species tree vertex. The below_events member
 // is used to keep track of the events that led to the optimal cost of
 // placing u at a descendant of x (possibly x itself):
-// 
+//
 // S
 //      A speciation with the left child of u below left child of x,
 //      and right child of u below right child of x.
-//      
+//
 // S_REV
 //      A speciation with left child of u below right child of x, and
 //      right child of u below left child of x.
-//      
+//
 // D
 //      A duplication
-//      
+//
 // T_LEFT
 //      The left edge of u is a transfer edge.
-//      
+//
 // T_RIGHT
 //      The right edge of u is a transfer edge.
-//      
+//
 // BELOW_LEFT
 //      The optimum cost can be achieved by placing u at a descendant
 //      of the left child of x.
-//      
+//
 // BELOW_LEFT
 //      The optimum cost can be achieved by placing u at a descendant
 //      of the right child of x.
@@ -129,42 +125,41 @@ ostream &operator<<(ostream &, const Scenario &);
 //      represented by e led to the optimal cost of placing u at a
 //      descendant of x (possibly x itself). This member is set during
 //      the dynamic programming algorithm.
-//      
+//
 // outside_sibling:
 //      The vid_t of the sibling of x, if placing u below the sibling
 //      gives the optimal cost of placing u outside x, and
 //      tree_type::NONE otherwise. This member is set during
 //      the dynamic programming algorithm.
-//      
+//
 // outside_ancestor:
 //      The vid_t of the nearest proper ancestor of x such that
 //      placing u below the sibling of the ancestor gives the optimal
 //      cost of placing u outside x, and tree_type::NONE if no such
 //      ancestor exists. This member is set during the dynamic
 //      programming algorithm.
-//      
+//
 // min_transfers:
 //      The minimum number of transfer required for obtaining the
 //      optimum cost of placing u at a descendant of x. This is used
 //      when the --minimum-transfers flag has been set.
-//      
+//
 // scenarios_below_needed:
 //      Set to true iff we need to compute all the scenarios
 //      corresponding to placing u at a descendant of x.
-//      
+//
 // scenarios_at_needed:
 //      Set to true iff we need to compute all the scenarios
 //      corresponding to placing u _at_ x.
-//      
+//
 // below_placements:
 //      The set of descendants of x at which u can be placed to optain
 //      the optimum cost. If x is itself among this set, then it must
 //      always be the first element in the vector.
-//      
+//
 // scenarios_at:
 //      The set of scenarios corresponding to placing u _at_ x.
-//      
-//=============================================================================
+//*****************************************************************************
 class BacktrackElement {
 public:
     enum Event {S, S_REV, D, T_LEFT, T_RIGHT, BELOW_LEFT, BELOW_RIGHT, N_EVENTS};
@@ -183,8 +178,7 @@ public:
 
 
 
-//=============================================================================
-//
+//*****************************************************************************
 // global variables
 //
 // g_options
@@ -207,10 +201,7 @@ public:
 // g_backtrack_matrix
 //      Holds information needed during backtracking. See description
 //      of BacktrackElement for more details.
-//
-//=============================================================================
-
-
+//*****************************************************************************
 const cost_type COST_INF = numeric_limits<cost_type>::infinity();
 
 multi_array<cost_type, 2>           g_below;
@@ -234,40 +225,33 @@ struct ProgramInput {
 } g_input;
 
 
-//=============================================================================
-//
+//*****************************************************************************
 // print_error()
 //
 // Prints message to stderr with a suffix identifying the program.
-//
-//============================================================================
+//*****************************************************************************
 void print_error(const char *);
 
-//=============================================================================
-//
+//*****************************************************************************
 // parse_options()
 //
 // Parses the command line options and fills in values into
 // g_input. Returns an options_description suitable for printing with
 // the program's help message.
-//
-//=============================================================================
+//*****************************************************************************
 po::options_description parse_options(int argc, char*argv[]);
 
-//=============================================================================
-//
+//*****************************************************************************
 // check_options()
 //
 // Should be called after parse_options. Returns true if options given
 // are consistent and all arguments have been provided. If any errors
 // are detected, a message is printed to stderr and false is
 // returned. The caller can then simply end the program.
-//
-//=============================================================================
+//*****************************************************************************
 bool check_options();
 
-//=============================================================================
-//
+//*****************************************************************************
 // check_input()
 //
 // Should be called to check the data in g_input once everything has
@@ -276,12 +260,10 @@ bool check_options();
 // checks that the costs of transfer and duplication are not too
 // large. If any errors are detected, a message is printed to stderr
 // and false is returned. Otherwise true is returned.
-//
-//=============================================================================
+//*****************************************************************************
 bool check_input();
 
-//=============================================================================
-//
+//*****************************************************************************
 // read_species_tree()
 // read_gene_tree()
 //
@@ -290,13 +272,11 @@ bool check_input();
 // attempt to construct binary trees. If errors are detected, an
 // apropriate error message is written to stderr and false is
 // returned. Otherwise, true is returned.
-//
-//=============================================================================
+//*****************************************************************************
 bool read_species_tree();
 bool read_gene_tree();
 
-//=============================================================================
-//
+//*****************************************************************************
 // read_sigma()
 //
 // Constructs the mapping g_input.sigma of the gene tree leaves to the
@@ -304,33 +284,27 @@ bool read_gene_tree();
 // g_input.sigma_fname. If any erros are detected, an apropriate error
 // message is written to stderr and fase is returned. Otherwise, true
 // is returned.
-//
-//=============================================================================
+//*****************************************************************************
 bool read_sigma();
 
-//=============================================================================
-//
+//*****************************************************************************
 // dp_algorithm()
-// 
+//
 // Runs the dynamic programming algorithm. For details see the
 // relevant article cited in the beginning of the file.
-//
-//=============================================================================
+//*****************************************************************************
 void dp_algorithm();
 
-//=============================================================================
-//
+//*****************************************************************************
 // compute_below()
 // compute_outside()
 //
 // These are helper functions used by dp_algorithm.
-//
-//=============================================================================
+//*****************************************************************************
 void compute_below(vid_t u, vid_t x);
 void compute_outside(vid_t u, vid_t x);
 
-//=============================================================================
-//
+//*****************************************************************************
 // backtrack()
 //
 // Runs the backtrack algorithm and finds all optimal
@@ -341,12 +315,10 @@ void compute_outside(vid_t u, vid_t x);
 // backtrack(). If both flags are set, the scenarios with minimal
 // transfers are found first, and among these, the ones with minimal
 // number of losses are inserted into the return vector.
-//
-//=============================================================================
+//*****************************************************************************
 void backtrack(vector<Scenario> &);
 
-//=============================================================================
-//
+//*****************************************************************************
 // backtrack_below_placements()
 // backtrack_outside_placements()
 // backtrack_mark_needed_scenarios_below()
@@ -401,8 +373,7 @@ void backtrack(vector<Scenario> &);
 //      g_backtrack_matrix[u][x].scenarios_at. The Event passed is
 //      used to set the bits of transfer_edges or duplications in the
 //      newly created scenarios.
-//
-//=============================================================================
+//*****************************************************************************
 void backtrack_below_placements(vid_t u, vid_t x);
 void backtrack_outside_placements(vid_t u, vid_t x, vector<vid_t> &);
 void backtrack_mark_needed_scenarios_below(vid_t u, vid_t x);
@@ -423,7 +394,7 @@ main(int argc, char *argv[])
             if (g_options.count("help"))
                 {
                     cout << USAGE << "\n"
-                         << visible_opts << "\n"; 
+                         << visible_opts << "\n";
                     exit(EXIT_SUCCESS);
                 }
         }
@@ -443,16 +414,16 @@ main(int argc, char *argv[])
         read_gene_tree() &&
         read_sigma() &&
         check_input();
-    
+
     if (!input_ok)
         {
             exit(EXIT_FAILURE);
         }
-    
+
     // We will use postorder to number the vertices of the gene tree for output.
     get_postorder_numbering(*g_input.gene_tree, g_input.gene_tree_numbering);
-   
-    
+
+
     // Run the main algorithm of this program.
     dp_algorithm();
 
@@ -473,7 +444,7 @@ main(int argc, char *argv[])
                     cout << sc << "\n";
                 }
         }
-       
+
 
 
     return EXIT_SUCCESS;
@@ -529,7 +500,7 @@ parse_options(int argc, char*argv[])
         ("gene-tree-file", po::value<string>(&g_input.gene_tree_fname))
         ("map-file", po::value<string>(&g_input.sigma_fname))
         ;
-            
+
     po::positional_options_description positional_options;
     positional_options.add("species-tree-file", 1);
     positional_options.add("gene-tree-file", 1);
@@ -537,7 +508,7 @@ parse_options(int argc, char*argv[])
 
     // Add all options into one options_description for parsing
     all_options.add(visible_opts).add(hidden_opts);
-            
+
     // Parse options.
     po::command_line_parser parser(argc, argv);
     parser.options(all_options);
@@ -561,7 +532,7 @@ check_options()
             print_error("Too few arguments");
             return false;
         }
-    
+
     return true;
 }
 
@@ -680,7 +651,7 @@ read_sigma()
             print_error(e.what());
             return false;
         }
-    
+
     return true;
 }
 
@@ -693,7 +664,7 @@ dp_algorithm()
     const tree_type        &G = *g_input.gene_tree;
     const bool              do_backtrack = !g_input.print_only_cost;
 
-    
+
 
     // Allocate memory for the matrices.
     g_below.resize(boost::extents[G.size()][S.size()]);
@@ -712,9 +683,9 @@ dp_algorithm()
                     g_outside[u][x] = COST_INF;
                 }
         }
-    
 
-    
+
+
     // The algorithm itself is described in a published paper.
     for (vid_t u = G.postorder_begin();
          u != tree_type::NONE;
@@ -727,7 +698,7 @@ dp_algorithm()
                 {
                     compute_below(u, x);
                 }
-            
+
             // Compute g_outside[u][*].
             for (vid_t x = S.preorder_begin();
                  x != S.NONE;
@@ -815,7 +786,7 @@ compute_outside(vid_t u, vid_t x)
     vid_t x_parent = S.parent(x);
     vid_t x_sibling =
         S.left(x_parent) == x ? S.right(x_parent) : S.left(x_parent);
-    
+
     cost_type min_cost = min(g_below[u][x_sibling], g_outside[u][x_parent]);
     g_outside[u][x] = min_cost;
 
@@ -852,7 +823,7 @@ backtrack(vector<Scenario> &scenarios)
     const tree_type                    &G = *g_input.gene_tree;
     const vector<vid_t>                &sigma = g_input.sigma;
     multi_array<BacktrackElement, 2>   &matrix = g_backtrack_matrix;
-    
+
     // Backtrack the placements for each u and x.
     for (vid_t u = G.postorder_begin(); u != tree_type::NONE; u = G.postorder_next(u))
         {
@@ -897,7 +868,7 @@ backtrack(vector<Scenario> &scenarios)
                     backtrack_min_transfers(u, x);
                 }
         }
-    
+
     // Backtrack the needed scenarios.
     for (vid_t u = G.postorder_begin(); u < G.size(); u = G.postorder_next(u))
         {
@@ -934,7 +905,7 @@ backtrack(vector<Scenario> &scenarios)
                         }
                 }
         }
-    
+
     // Find the final sets of scenarios.
     BOOST_FOREACH(vid_t x, matrix[0][0].below_placements)
         {
@@ -971,7 +942,7 @@ backtrack_below_placements(vid_t u, vid_t x)
 
     if (g_below[u][x] == COST_INF) // If no solutions exist
         return;
-                    
+
     if (G.is_leaf(u))
         {
             elem.below_placements.push_back(g_input.sigma[u]);
@@ -985,7 +956,7 @@ backtrack_below_placements(vid_t u, vid_t x)
             BacktrackElement &left_elem = g_backtrack_matrix[G.left(u)][x];
             BacktrackElement &right_elem = g_backtrack_matrix[G.right(u)][x];
             const bitset<BacktrackElement::N_EVENTS> &e = elem.below_events;
-                            
+
             // First, determine if u is placed _at_ x.
             if (e[BacktrackElement::S] || e[BacktrackElement::S_REV] || e[BacktrackElement::D] ||
                 (e[BacktrackElement::T_LEFT] && right_elem.below_placements[0] == x) ||
@@ -997,14 +968,14 @@ backtrack_below_placements(vid_t u, vid_t x)
             // Then, see where u is placed below x.
             if (elem.below_events[BacktrackElement::BELOW_LEFT])
                 {
-                    vector<vid_t> &left_placements = 
+                    vector<vid_t> &left_placements =
                         g_backtrack_matrix[u][S.left(x)].below_placements;
                     copy(left_placements.begin(), left_placements.end(),
                          back_inserter(elem.below_placements));
                 }
             if (elem.below_events[BacktrackElement::BELOW_RIGHT])
                 {
-                    vector<vid_t> &right_placements = 
+                    vector<vid_t> &right_placements =
                         g_backtrack_matrix[u][S.right(x)].below_placements;
                     copy(right_placements.begin(), right_placements.end(),
                          back_inserter(elem.below_placements));
@@ -1050,7 +1021,7 @@ backtrack_mark_needed_scenarios_below(vid_t u, vid_t x)
     if (e[BacktrackElement::T_LEFT])
         {
             matrix[G.right(u)][x].scenarios_below_needed = true;
-            
+
             vector<vid_t> outside_placements;
             backtrack_outside_placements(G.left(u), x, outside_placements);
             BOOST_FOREACH (vid_t y, outside_placements)
@@ -1061,7 +1032,7 @@ backtrack_mark_needed_scenarios_below(vid_t u, vid_t x)
     if (e[BacktrackElement::T_RIGHT])
         {
             matrix[G.left(u)][x].scenarios_below_needed = true;
-            
+
             vector<vid_t> outside_placements;
             backtrack_outside_placements(G.right(u), x, outside_placements);
             BOOST_FOREACH (vid_t y, outside_placements)
@@ -1151,7 +1122,7 @@ backtrack_scenarios_at(vid_t u, vid_t x)
         {
             vector<vid_t> outside_placements;
             backtrack_outside_placements(G.left(u), x, outside_placements);
-            
+
             BOOST_FOREACH (vid_t y, outside_placements) {
                 BOOST_FOREACH (vid_t y1, matrix[G.left(u)][y].below_placements) {
                     combine_scenarios(matrix[G.left(u)][y1].scenarios_at,
@@ -1164,7 +1135,7 @@ backtrack_scenarios_at(vid_t u, vid_t x)
         {
             vector<vid_t> placements;
             backtrack_outside_placements(G.right(u), x, placements);
-            
+
             BOOST_FOREACH (vid_t y, placements) {
                 BOOST_FOREACH (vid_t y1, matrix[G.right(u)][y].below_placements) {
                     combine_scenarios(matrix[G.right(u)][y1].scenarios_at,
@@ -1258,7 +1229,7 @@ backtrack_outside_placements(vid_t u, vid_t x, vector<vid_t> &placements)
         {
             placements.push_back(outside_sibling);
         }
-            
+
     for(vid_t cur = g_backtrack_matrix[u][x].outside_ancestor;
         cur != tree_type::NONE;
         cur = g_backtrack_matrix[u][cur].outside_ancestor)
@@ -1336,7 +1307,7 @@ operator<<(ostream &out, const Scenario &sc)
                 }
         }
     sort(transfer_edges.begin(), transfer_edges.end());
-    
+
     vector<unsigned> duplications;
     for (vid_t u = 0; u < g_input.gene_tree->size(); ++u)
         {
@@ -1358,7 +1329,7 @@ operator<<(ostream &out, const Scenario &sc)
                                                 g_input.sigma,
                                                 sc.transfer_edges);
     out << "\n";
-    
+
     return out;
 }
 
@@ -1375,7 +1346,7 @@ operator<(const Scenario &sc1, const Scenario &sc2)
         {
             return false;
         }
-    
+
     int losses1 = count_losses(*g_input.species_tree, *g_input.gene_tree,
                                g_input.sigma, sc1.transfer_edges);
     int losses2 = count_losses(*g_input.species_tree, *g_input.gene_tree,
@@ -1388,7 +1359,7 @@ operator<(const Scenario &sc1, const Scenario &sc2)
         {
             return false;
         }
-    
+
     dynamic_bitset<> transfer_edges1(sc1.transfer_edges.size());
     dynamic_bitset<> transfer_edges2(sc1.transfer_edges.size());
     for (unsigned i = 0; i < sc1.transfer_edges.size(); ++i)
