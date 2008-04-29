@@ -62,6 +62,11 @@ for i in range(10):
                              res_dp_file.name + " " +
                              res_fpt_file.name)
             if diff != 0:
+                print s
+                print g
+                for a in sigma:
+                    print a[0], a[1],
+                print
                 raise RuntimeError, "Test Failed"
     sys.stderr.write('.')
 print
