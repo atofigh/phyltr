@@ -16,9 +16,7 @@
 #include <cerrno>
 #include <vector>
 #include <bitset>
-#include <stack>
 #include <iterator>
-#include <fstream>
 #include <limits>
 
 #include <boost/program_options.hpp>
@@ -188,7 +186,10 @@ public:
 //
 // g_input
 //      Holds the input to the program. This includes both flags,
-//      filenames, and the data contained in the files.
+//      filenames, and the data contained in the
+//      files. gene_tree_numbering is used to number the gene tree
+//      vertices for output, i.e., gene_tree_numbering[u] is the
+//      number of vertex u when printing solutions.
 //
 // g_below
 // g_outside
@@ -529,7 +530,9 @@ check_options()
         g_options.count("gene-tree-file") +
         g_options.count("map-file") != 3)
         {
-            print_error("Too few arguments");
+            string msg = "Too few arguments\nTry '" + PROGRAM_NAME +
+                " --help' for more information";
+            print_error(msg.c_str());
             return false;
         }
 
@@ -1325,9 +1328,9 @@ operator<<(ostream &out, const Scenario &sc)
     copy(duplications.begin(), duplications.end(),
          ostream_iterator<unsigned>(out, " "));
     out << "\nNumber of losses: " << count_losses(*g_input.species_tree,
-                                                *g_input.gene_tree,
-                                                g_input.sigma,
-                                                sc.transfer_edges);
+                                                  *g_input.gene_tree,
+                                                  g_input.sigma,
+                                                  sc.transfer_edges);
     out << "\n";
 
     return out;

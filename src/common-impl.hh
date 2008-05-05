@@ -4,6 +4,7 @@
 #include <iterator>
 #include <algorithm>
 #include <ostream>
+#include <fstream>
 #include <stdexcept>
 #include <sys/time.h>
 
