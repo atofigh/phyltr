@@ -19,9 +19,9 @@ res_fpt_file = tempfile.NamedTemporaryFile()
 
 file_names = ' '.join([s_file.name, g_file.name, sigma_file.name])
 
-for i in range(10):
-    for s_size in range(2, 10):
-        for g_size in range(s_size, 10):
+for s_size in range(2, 15):
+    for g_size in range(s_size, 15):
+        for i in range(10):
             (s, g, sigma) = create_random_input(s_size, g_size)
             s_file.truncate(0)
             s_file.seek(0)
