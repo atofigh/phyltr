@@ -8,7 +8,9 @@ opts = Options()
 opts.AddOptions(
     BoolOption('profile', 'compile with -pg -O2 and without -g', 'False'),
     BoolOption('debug', 'compile with -g without optimizations', 'False'),
-    BoolOption('release', 'compile with -O2 without -g', 'False')
+    BoolOption('release', 'compile with -O2 without -g', 'False'),
+    PathOption('boost', 'where the root of boost is installed', '/usr'),
+    PathOption('NHparser', 'where the root of NHparser is installed', '/usr')
     )
 env = Environment(options = opts)
 Help(opts.GenerateHelpText(env))
@@ -27,15 +29,12 @@ elif env['release']:
 else:
     env.Append(CCFLAGS = ' -g -O2')
 env.Append(CCFLAGS = '-Wall -pedantic -ansi -Wno-long-long')
+env.Append(LINKFLAGS = '-static')
 
-# Make sure you are using SYSDIR if it is set
-env.Replace(SYSDIR = os.environ['SYSDIR'])
-
-if len(env['SYSDIR']) != 0:
-    env.Append(CPPPATH = '$SYSDIR/include',
-               LIBPATH = '$SYSDIR/lib')
-    env['ENV']['LD_LIBRARY_PATH'] = env.subst('$SYSDIR/lib')
-
+env.AppendUnique(CPPPATH = [env.subst('$boost/include')],
+                 LIBPATH = [env.subst('$boost/lib')])
+env.AppendUnique(CPPPATH = [env.subst('$NHparser/include')],
+                 LIBPATH = [env.subst('$NHparser/lib')])
 
 # Declare the programs and their source files
 common_objs = env.Object('build/common.cc')
