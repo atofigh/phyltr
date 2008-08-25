@@ -1,8 +1,5 @@
 import os, sys
 
-# We want to seperate build directory from source directory
-BuildDir('build', 'src')
-
 # Set up the command line options of the SConstruct file
 opts = Options()
 opts.AddOptions(
@@ -14,6 +11,9 @@ opts.AddOptions(
     )
 env = Environment(options = opts)
 Help(opts.GenerateHelpText(env))
+
+# We want to seperate build directory from source directory
+env.VariantDir('build', 'src')
 
 # Ensure that at most one of profile, debug, and release has been set.
 if env['debug'] + env['profile'] + env['release'] > 1:
@@ -35,6 +35,11 @@ env.AppendUnique(CPPPATH = [env.subst('$boost/include')],
                  LIBPATH = [env.subst('$boost/lib')])
 env.AppendUnique(CPPPATH = [env.subst('$NHparser/include')],
                  LIBPATH = [env.subst('$NHparser/lib')])
+
+# This is just a workaround for a bug in scons (issue 2121). At the
+# moment scons does not duplicate subdirectories in the source
+# directory properly.
+env.Append(CPPPATH = ['build/utils'])
 
 # Declare the programs and their source files
 common_objs = env.Object('build/common.cc')
