@@ -60,9 +60,18 @@ phyltr_gen_gtree = env.Program(target = 'bin/phyltr-gen-gtree',
                                source = ['build/phyltr-gen-gtree.cc'] + common_objs,
                                LIBS = ['NHparser', 'boost_program_options'])
 
+phyltr_event_combinations = env.Program(target = 'bin/phyltr-event-combinations',
+                                        source = ['build/phyltr-event-combinations.cc'] + common_objs,
+                                        LIBS = ['NHparser', 'boost_program_options'])
+
+
 # Declare a test target that runs the test script(s)
 test_target = env.Command('test', None, '@cd tests; python test.py')
-env.Depends(test_target, [phyltr_dp, phyltr_fpt])
+env.Depends(test_target, [phyltr_dp, phyltr_fpt, phyltr_event_combinations])
 
 # Set the default targets
-env.Default([phyltr_fpt, phyltr_dp, phyltr_gen_stree, phyltr_gen_gtree])
+env.Default([phyltr_fpt,
+             phyltr_dp,
+             phyltr_gen_stree,
+             phyltr_gen_gtree,
+             phyltr_event_combinations])

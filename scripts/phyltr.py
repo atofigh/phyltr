@@ -181,3 +181,30 @@ def create_random_input(species, genes):
 
     return "".join(new_species_parts), "".join(new_gene_parts), sigma
 
+def gcd(a,b):
+    """Return greatest common divisor using Euclid's Algorithm."""
+    while b:      
+ 	 a, b = b, a % b
+    return a
+
+def lcm(a, b):
+    return (a * b) / gcd(a, b)
+
+
+class Rational:
+    def __init__(self, numerator, denominator):
+        common = gcd(numerator, denominator)
+        self.numerator = numerator / common
+        self.denominator = denominator / common
+
+    def __cmp__(self, other):
+        return self.numerator * other.denominator - self.denominator * other.numerator
+
+    def __hash__(self):
+        return int(hash(self.numerator) * hash(self.denominator))
+
+    def __repr__(self):
+        return str(self.numerator) + '/' + str(self.denominator)
+
+    def __str__(self):
+        return repr(self)

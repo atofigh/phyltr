@@ -282,8 +282,8 @@ bool read_gene_tree();
 //
 // Constructs the mapping g_input.sigma of the gene tree leaves to the
 // species tree leaves by reading the file whose filename is given in
-// g_input.sigma_fname. If any erros are detected, an apropriate error
-// message is written to stderr and fase is returned. Otherwise, true
+// g_input.sigma_fname. If any errors are detected, an apropriate error
+// message is written to stderr and false is returned. Otherwise, true
 // is returned.
 //*****************************************************************************
 bool read_sigma();
