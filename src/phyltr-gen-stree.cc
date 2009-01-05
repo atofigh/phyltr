@@ -17,6 +17,7 @@
 #include <vector>
 #include <iostream>
 #include <iomanip>
+#include <sstream>
 
 //============================================================================
 //             Namespace declarations and using directives.
@@ -348,11 +349,19 @@ print_tree_r(Node_ptr node, unsigned next_leaf_id, bool output_lengths)
     cout << ", ";
     next_leaf_id = print_tree_r(node->right, next_leaf_id, output_lengths);
     cout << ")";
+
+    ostringstream os;
     if (output_lengths)
-        cout << ":" << setprecision(LENGTH_PRECISION) << (node->time - node->parent->time);
+        os << ":" << setprecision(LENGTH_PRECISION) << showpoint << (node->time - node->parent->time);
     else
-        cout << ":" << setprecision(LENGTH_PRECISION) << node->time;
-    
+        os << ":" << setprecision(LENGTH_PRECISION) << showpoint << node->time;
+    string s = os.str();
+
+    cout << s;
+    if (s[s.size() - 1] == '.')
+    {
+        cout << '0';
+    }
     
     return next_leaf_id;
 }
