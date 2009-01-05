@@ -219,6 +219,13 @@ int count_losses(const Binary_tree<T> &S,
                 continue;
 
             vid_t x = S.parent(lambda[u]);
+
+            vid_t u_sibling = G.left(p) == u ? G.right(p) : G.left(p);
+            if (x != lambda[p] && lambda[u_sibling] == lambda[p])
+                {
+                    losses += 1;
+                }
+
             while (x != lambda[p])
                 {
                     losses += 1;
