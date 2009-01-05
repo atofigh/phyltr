@@ -223,21 +223,6 @@ main(int argc, char *argv[])
     // Run the dynamic programming algorithm.
     dp_algorithm();
 
-    const tree_type        &S = *g_input.species_tree;
-    const tree_type        &G = *g_input.gene_tree;
-
-//     for (vid_t u = 0; u < G.size(); ++u)
-//     {
-//         for (vid_t x = 0; x < S.size(); ++x)
-//         {
-//             cout << setw(3) << u << setw(3) << x << "\t";
-//             BOOST_FOREACH (combo_t c, g_below[u][x])
-//             {
-//                 cout << "(" << c.first << ", " << c.second << ") ";
-//             }
-//             cout << "\n";
-//         }
-//     }
 
 
     // Compute the cost intervals in which each minimal
@@ -280,6 +265,9 @@ main(int argc, char *argv[])
              << setw(6) << upper_numerator
              << "/"
              << setw(6) << left << common_denominator << right
+             << setw(6) << setprecision(3) << double(lower_numerator) / common_denominator
+             << setw(6) << setprecision(3) << double(upper_numerator) / common_denominator
+             << setw(6) << setprecision(3) << (combo.first * lower_numerator + combo.second * upper_numerator) / double(common_denominator)
              << "\n";
 
         ++iter;
