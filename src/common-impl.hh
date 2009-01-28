@@ -210,7 +210,9 @@ int count_losses(const Binary_tree<T> &S,
     compute_lambda(S, G, sigma, transfer_edges, lambda);
 
     // For each non-transfer edge (u, v) in G, count the number of
-    // speciations that we pass from lambda(u) to lambda(v).
+    // speciations that we pass from lambda(u) to lambda(v).  A loss
+    // is also incurred if u is a duplication and lambda(u) !=
+    // lambda(v).
     int losses = 0;
     for (vid_t u = 1; u < G.size(); ++u)
         {
