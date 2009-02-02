@@ -51,7 +51,7 @@ struct Node {
 const string PROG_NAME = "phyltr-gen-stree";
 const string USAGE = "Usage: " + PROG_NAME +
     " [OPTION]... TIME BIRTH-RATE DEATH-RATE";
-const unsigned LENGTH_PRECISION = 3;    // The precision with which
+const unsigned LENGTH_PRECISION = 4;    // The precision with which
                                         // times on the trees will be
                                         // printed.
 

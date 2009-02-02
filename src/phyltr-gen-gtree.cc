@@ -20,6 +20,7 @@ extern "C" {
 #include <functional>
 #include <algorithm>
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 
 
@@ -52,13 +53,14 @@ struct Node {
     Node_ptr    parent, left, right;
     vid_t       stree_label;
     Event       event;
+    double      edge_time;
     bool        edge_is_transfer;
     unsigned    id;
 
     Node(Node_ptr p, Node_ptr l, Node_ptr r,
-         vid_t label, Event e, bool transfer)
+         vid_t label, Event e, double t, bool transfer)
         : parent(p), left(l), right(r), stree_label(label), event(e),
-          edge_is_transfer(transfer), id(next_id++)
+          edge_time(t), edge_is_transfer(transfer), id(next_id++)
     {}
 };
 
@@ -71,6 +73,9 @@ unsigned Node::next_id = 0;
 const string PROG_NAME = "phyltr-gen-gtree";
 const string USAGE = "Usage: " + PROG_NAME +
     " [OPTION]... TREE-FILE DUPLICATION-RATE TRANSFER-RATE DEATH-RATE NAME-PREFIX";
+
+/* The precision with which edge times will be printed. */
+const int TIME_PRECISION = 4;
 
 /* helper constant for null shared pointer to Nodes. */
 Node_ptr null;
@@ -352,7 +357,8 @@ main(int argc, char *argv[])
             vector<vid_t> slice;
     
             /* Start with a single gene at or before the species tree root. */
-            gtree_root.reset(new Node(null, null, null, 0, Node::none, false));
+            gtree_root.reset(new Node(null, null, null, 0,
+                                      Node::none, 0.0, false));
             cur_genes.push_back(gtree_root);
             slice.push_back(0);
 
@@ -473,15 +479,26 @@ advance_process(double time,
         {
             /* When is the next event? */
             double total_rate = cur_genes.size() * (delta + tau + mu);
+            double time_used;
             if (total_rate > 0)
                 {
                     boost::exponential_distribution<double> rng_exp(total_rate);
-                    time -= rng_exp(g_rng_d);
+                    time_used = min(rng_exp(g_rng_d), time);
                 }
             else
                 {
-                    time = 0;
+                    time_used = time;
                 }
+            /* update the times of the gene tree edges. */
+            vector<Node_ptr>::iterator e = cur_genes.end();
+            for (vector<Node_ptr>::iterator i = cur_genes.begin();
+                 i != e; ++i)
+                {
+                    (*i)->edge_time += time_used;
+                }
+
+            /* if nothing happened during remaining time, then end. */
+            time -= time_used;
             if (time <= 0)
                 break;
 
@@ -495,10 +512,10 @@ advance_process(double time,
                 {
                     Node_ptr g1(new Node(chosen, null, null,
                                          chosen->stree_label,
-                                         Node::none, false));
+                                         Node::none, 0.0, false));
                     Node_ptr g2(new Node(chosen, null, null,
                                          chosen->stree_label,
-                                         Node::none, false));
+                                         Node::none, 0.0, false));
                     chosen->left = g1;
                     chosen->right = g2;
                     chosen->event = Node::duplication;
@@ -520,10 +537,10 @@ advance_process(double time,
                             /* Create new children for the chosen gene. */
                             Node_ptr g1(new Node(chosen, null, null,
                                                  chosen->stree_label,
-                                                 Node::none, false));
+                                                 Node::none, 0.0, false));
                             Node_ptr g2(new Node(chosen, null, null,
                                                  slice[transfer_trunk_idx],
-                                                 Node::none, true));
+                                                 Node::none, 0.0, true));
                             chosen->left = g1;
                             chosen->right = g2;
                             chosen->event = Node::transfer;
@@ -549,6 +566,7 @@ advance_process(double time,
                     sibling->parent = grand_parent;
                     sibling->edge_is_transfer =
                         sibling->edge_is_transfer || parent->edge_is_transfer;
+                    sibling->edge_time += parent->edge_time;
                     if (grand_parent == 0)
                         {
                             gtree_root = sibling;
@@ -589,10 +607,10 @@ speciate(const Tree_type       &stree,
             Node_ptr cur_gene = cur_genes[i];
             Node_ptr g1(new Node(cur_gene, null, null,
                                  stree.left(cur_snode),
-                                 Node::none, false));
+                                 Node::none, 0.0, false));
             Node_ptr g2(new Node(cur_gene, null, null,
                                  stree.right(cur_snode),
-                                 Node::none, false));
+                                 Node::none, 0.0, false));
             cur_gene->left = g1;
             cur_gene->right = g2;
             cur_gene->event = Node::speciation;
@@ -726,4 +744,5 @@ print_gtree_r(ostream &out,
             print_gtree_r(out, stree, n->right, numbers);
             out << ")";
         }
+    out << ":" << setprecision(TIME_PRECISION) << showpoint << n->edge_time;
 }
