@@ -146,8 +146,6 @@ void print_events(ostream &out, const Tree_type &stree);
 int 
 main(int argc, char *argv[])
 {
-    init_rand(g_generator);
-
     namespace po = boost::program_options;
     
     po::options_description visible_opts("Command Line Options");
@@ -169,6 +167,10 @@ main(int argc, char *argv[])
                  po::value<unsigned>(&max_attempts)->default_value(10000),
                  "The maximum number of times the process will run if the "
                  "species goes extinct during.")
+                ("seed",
+                 po::value<unsigned>(),
+                 "A seed to initialize the random number generator with."
+                 )
                 ;
             
             /* Declare positional options. */
@@ -212,6 +214,17 @@ main(int argc, char *argv[])
             exit(EXIT_SUCCESS);
         }
     
+    if (g_options.count("seed"))
+        {
+            init_rand(g_generator, g_options["seed"].as<unsigned>());
+        }
+    else
+        {
+            init_rand(g_generator);
+        }
+
+
+
     /* Check that all required positional arguments are given. */
     if (g_options.count("filename") == 0
         || g_options.count("delta") == 0
