@@ -46,23 +46,23 @@ common_objs = env.Object('build/common.cc')
 
 phyltr_dp = env.Program(target = 'bin/phyltr-dp',
                         source = ['build/phyltr-dp.cc'] + common_objs,
-                        LIBS = ['NHparser', 'boost_program_options'])
+                        LIBS = ['NHparser', 'boost_program_options-mt'])
 
 phyltr_fpt = env.Program(target = 'bin/phyltr-fpt',
                          source = ['build/phyltr-fpt.cc'] + common_objs,
-                         LIBS = ['NHparser', 'boost_program_options'])
+                         LIBS = ['NHparser', 'boost_program_options-mt'])
 
 phyltr_gen_stree = env.Program(target = 'bin/phyltr-gen-stree',
                                source = ['build/phyltr-gen-stree.cc'] + common_objs,
-                               LIBS = ['boost_program_options'])
+                               LIBS = ['boost_program_options-mt'])
 
 phyltr_gen_gtree = env.Program(target = 'bin/phyltr-gen-gtree',
                                source = ['build/phyltr-gen-gtree.cc'] + common_objs,
-                               LIBS = ['NHparser', 'boost_program_options'])
+                               LIBS = ['NHparser', 'boost_program_options-mt'])
 
 phyltr_event_combinations = env.Program(target = 'bin/phyltr-event-combinations',
                                         source = ['build/phyltr-event-combinations.cc'] + common_objs,
-                                        LIBS = ['NHparser', 'boost_program_options'])
+                                        LIBS = ['NHparser', 'boost_program_options-mt'])
 
 
 # Declare a test target that runs the test script(s)
