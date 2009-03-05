@@ -95,6 +95,10 @@ Node_ptr gtree_root = null;
 
 /* The file prefix of the output files. */
 string file_prefix;
+
+/* The "only-visible-events" flag. */
+bool only_visible = false;
+
 //=============================================================================
 //                        Function declarations
 //=============================================================================
@@ -147,7 +151,7 @@ int
 main(int argc, char *argv[])
 {
     namespace po = boost::program_options;
-    
+
     po::options_description visible_opts("Command Line Options");
     po::options_description hidden_opts("");
     po::options_description all_options("");
@@ -170,6 +174,11 @@ main(int argc, char *argv[])
                 ("seed",
                  po::value<unsigned>(),
                  "A seed to initialize the random number generator with."
+                 )
+                ("visible-events-only,v",
+                 po::bool_switch(&only_visible)->default_value(false),
+                 "When this switch is given, events will only be classified "
+                 "only if they are \"visible\"."
                  )
                 ;
             
@@ -700,20 +709,45 @@ print_events(ostream &out, const Tree_type &stree)
     postorder_gtree(gtree_postorder);
     
     out << "Transfer edges: ";
-    for (unsigned i = 0; i < gtree_postorder.size(); ++i)
+    for (unsigned i = 0; i < gtree_postorder.size() - 1; ++i) // skip root!
         {
             if (gtree_postorder[i]->edge_is_transfer)
-                out << i << " ";
+                {
+                    if (!only_visible)
+                        {
+                            out << i << " ";
+                        }
+                    else if (!stree.descendant(gtree_postorder[i]->stree_label,
+                                               gtree_postorder[i]->parent->stree_label))
+                        {
+                            out << i << " ";
+                        }
+                }
         }
     out << "\n";
     
     out << "Duplications:    ";
     for (unsigned i = 0; i < gtree_postorder.size(); ++i)
         {
-            if (gtree_postorder[i]->event == Node::duplication &&
-                !gtree_postorder[i]->edge_is_transfer)
+            if (gtree_postorder[i]->event == Node::duplication)
                 {
-                    out << i << " ";
+                    if (!only_visible)
+                        {
+                            out << i << " ";
+                        }
+                    else 
+                        {
+                            vid_t x = gtree_postorder[i]->stree_label;
+                            vid_t y = gtree_postorder[i]->left->stree_label;
+                            vid_t z = gtree_postorder[i]->right->stree_label;
+                            if (stree.descendant(y, x) &&
+                                stree.descendant(z, x) &&
+                                (stree.descendant(y, z) || 
+                                 stree.descendant(z, y)))
+                                {
+                                    out << i << " ";
+                                }
+                        }
                 }
         }
     out << "\n";
