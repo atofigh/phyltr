@@ -97,7 +97,10 @@ Node_ptr gtree_root = null;
 string file_prefix;
 
 /* The "only-visible-events" flag. */
-bool only_visible = false;
+bool only_visible_events = false;
+
+/* The "only-sane-scenarios" flag. */
+bool only_sane_scenarios = false;
 
 //=============================================================================
 //                        Function declarations
@@ -127,12 +130,21 @@ void speciate(const Tree_type      &stree,
               vector<Node_ptr>     &cur_genes);
 
 /*
+ * acceptable_gene_tree()
+ *
+ * Returns true if the gene tree produced by the process is
+ * acceptable, i.e., if the gene tree is not empty and it is not the
+ * case that the --sane-scenarios-only flag has been given and the
+ * scenario is not sane.
+ */
+bool acceptable_gene_tree(const Tree_type &stree);
+
+/*
  * print_gtree(), print_sigma(), print_gamma(), print_events()
  *
  * Functions used for outputting the result of the birth-death
  * process.
  */
-
 void print_gtree(ostream &out, const Tree_type &stree);
 void print_sigma(ostream &out, const Tree_type &stree);
 void print_gamma(ostream &out, const Tree_type &stree);
@@ -166,19 +178,42 @@ main(int argc, char *argv[])
                  "If not set, the birth-death process starts according to the length of "
                  "the root of the species tree. E.g., if you want to force the process "
                  "to start at the first speciation in the species tree, then set this "
-                 "paramter to zero.")
+                 "parameter to zero.")
+                ("sane-scenarios-only,s",
+                 po::bool_switch(&only_sane_scenarios)->default_value(false),
+                 "Gene trees created with strange event combinations are "
+                 "discarded. A scenario is sane iff (1) the children of each "
+                 "duplication are placed at or below the duplication in the "
+                 "species tree and at comparable species tree vertices, "
+                 "(2) the head of each "
+                 "transfer edge is placed at an incomparable species tree "
+                 "vertex compared to the tail, (3) each gene tree "
+                 "vertex has at least one of its children placed at or "
+                 "below it in the species tree, and (4) the children of "
+                 "each speciation are placed at incomparable species tree "
+                 "vertices and such that their lca is the speciation."
+                 )
                 ("max-attempts,a",
                  po::value<unsigned>(&max_attempts)->default_value(10000),
-                 "The maximum number of times the process will run if the "
-                 "species goes extinct during.")
+                 "The maximum number of times the process will restart if the "
+                 "gene tree goes extinct or if the scenario is not sane "
+                 "and the --sane-scenarios-only flag has been given.")
+                ("visible-events-only,v",
+                 po::bool_switch(&only_visible_events)->default_value(false),
+                 "When this switch is given, a duplication is classified "
+                 "as a duplication only if both its children are placed at "
+                 "comparable vertices in the species tree and are also placed "
+                 "at or below the duplication in the species tree, and a "
+                 "transfer edge is classified as a transfer edge only if "
+                 "the head is placed at an incomparable vertex compared to "
+                 "the tail. Note that this does not always transform "
+                 "a scenario to a sane one since other silly things can "
+                 "happen, e.g., a speciation followed by a transfer that "
+                 "places both children in the same edge."
+                 )
                 ("seed",
                  po::value<unsigned>(),
                  "A seed to initialize the random number generator with."
-                 )
-                ("visible-events-only,v",
-                 po::bool_switch(&only_visible)->default_value(false),
-                 "When this switch is given, events will only be classified "
-                 "only if they are \"visible\"."
                  )
                 ;
             
@@ -361,7 +396,7 @@ main(int argc, char *argv[])
      */
 
     unsigned attempts = max_attempts;
-    while (gtree_root == 0 && attempts--)
+    while (!acceptable_gene_tree(stree) && attempts--)
         {
             /* Create a vector with slice times in decreasing order so that we
                can pop the times from the back efficiently). */
@@ -436,7 +471,7 @@ main(int argc, char *argv[])
                 }
         }
 
-    if (gtree_root == 0)
+    if (!gtree_root)
         {
             cerr << PROG_NAME << ": "
                  << ": The gene became extinct during all "
@@ -487,10 +522,74 @@ void postorder_gtree(vector<Node_ptr> &gtree_postorder);
 void postorder_gtree_r(Node_ptr n, vector<Node_ptr> &gtree_postorder);
 void print_gtree_r(ostream &out, const Tree_type &stree,
                    Node_ptr n, vector<int> &numbers);
+bool is_sane(Node_ptr n, const Tree_type &stree);
 
 //=============================================================================
 //                   Function and member definitions.
 //=============================================================================
+
+bool
+acceptable_gene_tree(const Tree_type &stree)
+{
+    if (!gtree_root)
+        return false;
+
+    if (only_sane_scenarios && !is_sane(gtree_root, stree))
+        return false;
+
+    return true;
+}
+
+
+bool
+is_sane(Node_ptr n, const Tree_type &stree)
+{
+    if (!n)
+        return false;
+
+    vid_t x = n->stree_label;
+
+    /* The head of a transfer edge must be placed at an incomparable
+       stree vertex compared to the tail. */
+    if (n->edge_is_transfer && n->parent)
+        {
+            vid_t p = n->parent->stree_label;
+            if (stree.descendant(x, p))
+                return false;
+        }
+
+    if (!n->left)
+        return true;
+
+    vid_t y = n->left->stree_label;
+    vid_t z = n->right->stree_label;
+    vid_t lcayz = stree.lca(y, z);
+    
+    /* at least one of the children must be placed below x */
+    if (!stree.descendant(y, x) && ! stree.descendant(z, x))
+        return false;
+    
+    /* if n is a speciation, then the children must be strictly below
+       x and placed at incomparable stree vertices. */
+    if (n->event == Node::speciation)
+        {
+            if (lcayz != x)
+                return false;
+        }
+
+    /* If n is a duplications, both children must be placed below x
+       and at comparable stree vertices. */
+    if (n->event == Node::duplication)
+        {
+            if (lcayz != y && lcayz != z)
+                return false;
+            if (!stree.descendant(y, x) || !stree.descendant(z, x))
+                return false;
+        }
+
+    return is_sane(n->left, stree) && is_sane(n->right, stree);
+}
+
 
 void
 advance_process(double time,
@@ -589,7 +688,7 @@ advance_process(double time,
                     sibling->edge_is_transfer =
                         sibling->edge_is_transfer || parent->edge_is_transfer;
                     sibling->edge_time += parent->edge_time;
-                    if (grand_parent == 0)
+                    if (!grand_parent)
                         {
                             gtree_root = sibling;
                         }
@@ -713,7 +812,7 @@ print_events(ostream &out, const Tree_type &stree)
         {
             if (gtree_postorder[i]->edge_is_transfer)
                 {
-                    if (!only_visible)
+                    if (!only_visible_events)
                         {
                             out << i << " ";
                         }
@@ -731,7 +830,7 @@ print_events(ostream &out, const Tree_type &stree)
         {
             if (gtree_postorder[i]->event == Node::duplication)
                 {
-                    if (!only_visible)
+                    if (!only_visible_events)
                         {
                             out << i << " ";
                         }
