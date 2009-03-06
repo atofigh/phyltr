@@ -211,6 +211,10 @@ main(int argc, char *argv[])
                     Node_ptr np1(new Node(T, root, null, null));
                     Node_ptr np2(new Node(T, root, null, null));
                     root->time = 0;
+                    root->left = np1;
+                    root->right = np2;
+                    leaves[0] = np1;
+                    leaves.push_back(np2);
                 }
 
 
@@ -255,6 +259,7 @@ main(int argc, char *argv[])
                         }
                     else                                        //death
                         {
+                            cout << "hej\n";
                             if (leaves.size() == 1)
                                 {
                                     leaves.pop_back();
@@ -300,6 +305,7 @@ main(int argc, char *argv[])
 //=============================================================================
 
 unsigned print_tree_r(Node_ptr node, unsigned next_leaf_id, bool output_lengths);
+void print_length(Node_ptr node, bool output_lengths);
 
 //=============================================================================
 //                   Function and member definitions.
@@ -313,7 +319,7 @@ print_tree(Node_ptr root, bool output_lengths)
     if (!root->left)
         {
             cout << "s" << next_leaf_id;
-            cout << ":" << setprecision(LENGTH_PRECISION) << root->time;
+            print_length(root, output_lengths);
             cout << ";\n";
             
             return;
@@ -325,8 +331,8 @@ print_tree(Node_ptr root, bool output_lengths)
     cout << ", ";
     next_leaf_id = print_tree_r(root->right, next_leaf_id, output_lengths);
     cout << ")";
-    cout << ":" << setprecision(LENGTH_PRECISION) << root->time;
-    cout << ";\n";
+    print_length(root, output_lengths);
+    cout << root->time << ";\n";
 }
 
 unsigned
@@ -336,10 +342,7 @@ print_tree_r(Node_ptr node, unsigned next_leaf_id, bool output_lengths)
     if (!node->left)
         {
             cout << "s" << next_leaf_id;
-            if (output_lengths)
-                cout << ":" << setprecision(LENGTH_PRECISION) << (node->time - node->parent->time);
-            else
-                cout << ":" << setprecision(LENGTH_PRECISION) << node->time;
+            print_length(node, output_lengths);
             return next_leaf_id + 1;
         }
 
@@ -349,19 +352,30 @@ print_tree_r(Node_ptr node, unsigned next_leaf_id, bool output_lengths)
     cout << ", ";
     next_leaf_id = print_tree_r(node->right, next_leaf_id, output_lengths);
     cout << ")";
+    print_length(node, output_lengths);
+    
+    return next_leaf_id;
+}
 
+void
+print_length(Node_ptr node, bool output_lengths)
+{
     ostringstream os;
+    os << ":" << setprecision(LENGTH_PRECISION) << showpoint;
     if (output_lengths)
-        os << ":" << setprecision(LENGTH_PRECISION) << showpoint << (node->time - node->parent->time);
+        {
+            if (node->parent)
+                os << (node->time - node->parent->time);
+            else
+                os << node->time;
+        }
     else
-        os << ":" << setprecision(LENGTH_PRECISION) << showpoint << node->time;
+        os << node->time;
     string s = os.str();
 
     cout << s;
     if (s[s.size() - 1] == '.')
-    {
-        cout << '0';
-    }
-    
-    return next_leaf_id;
+        {
+            cout << '0';
+        }
 }
