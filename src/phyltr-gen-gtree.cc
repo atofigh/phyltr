@@ -102,6 +102,8 @@ bool only_visible_events = false;
 /* The "only-sane-scenarios" flag. */
 bool only_sane_scenarios = false;
 
+/* The "all-species" flag. */
+bool all_species= false;
 //=============================================================================
 //                        Function declarations
 //=============================================================================
@@ -193,7 +195,12 @@ main(int argc, char *argv[])
                  "each speciation are placed at incomparable species tree "
                  "vertices and such that their lca is the speciation."
                  )
-                ("max-attempts,a",
+                ("all-species,a",
+                 po::bool_switch(&all_species)->default_value(false),
+                 "If set, gene trees that lack genes in one or more "
+                 "species in the species tree are discarded."
+                 )
+                ("max-attempts,m",
                  po::value<unsigned>(&max_attempts)->default_value(10000),
                  "The maximum number of times the process will restart if the "
                  "gene tree goes extinct or if the scenario is not sane "
@@ -396,7 +403,8 @@ main(int argc, char *argv[])
      */
 
     unsigned attempts = max_attempts;
-    while (!acceptable_gene_tree(stree) && attempts--)
+    bool gene_tree_accepted = false;
+    while (attempts--)
         {
             /* Create a vector with slice times in decreasing order so that we
                can pop the times from the back efficiently). */
@@ -469,12 +477,17 @@ main(int argc, char *argv[])
                             speciate(stree, slice, idx, cur_genes);
                         }
                 }
+            if (acceptable_gene_tree(stree))
+                {
+                    gene_tree_accepted = true;
+                    break;
+                }
         }
 
-    if (!gtree_root)
+    if (!gene_tree_accepted)
         {
             cerr << PROG_NAME << ": "
-                 << ": The gene became extinct during all "
+                 << "No acceptable gene tree was produced in "
                  << max_attempts << " runs of the process\n";
             exit(EXIT_FAILURE);
         }
@@ -523,6 +536,7 @@ void postorder_gtree_r(Node_ptr n, vector<Node_ptr> &gtree_postorder);
 void print_gtree_r(ostream &out, const Tree_type &stree,
                    Node_ptr n, vector<int> &numbers);
 bool is_sane(Node_ptr n, const Tree_type &stree);
+bool genes_in_all_species(const Tree_type &stree);
 
 //=============================================================================
 //                   Function and member definitions.
@@ -535,6 +549,9 @@ acceptable_gene_tree(const Tree_type &stree)
         return false;
 
     if (only_sane_scenarios && !is_sane(gtree_root, stree))
+        return false;
+
+    if (all_species && !genes_in_all_species(stree))
         return false;
 
     return true;
@@ -589,6 +606,31 @@ is_sane(Node_ptr n, const Tree_type &stree)
 
     return is_sane(n->left, stree) && is_sane(n->right, stree);
 }
+
+
+bool
+genes_in_all_species(const Tree_type &stree)
+{
+    // Record which stree leaves occur as stree_labels in the gene
+    // tree and count them.
+    int stree_leaves = (stree.size() + 1) / 2;
+    vector<bool> visited_leaf(stree.size(), false);
+
+    vector<Node_ptr> gtree_postorder;
+    postorder_gtree(gtree_postorder);
+
+    BOOST_FOREACH(Node_ptr np, gtree_postorder)
+        {
+            if (!np->left)
+                {
+                    visited_leaf[np->stree_label] = true;
+                }
+        }
+    int visited_leaves = count(visited_leaf.begin(), visited_leaf.end(), true);
+
+    return stree_leaves == visited_leaves;
+}
+
 
 
 void
