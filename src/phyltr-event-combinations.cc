@@ -236,11 +236,18 @@ main(int argc, char *argv[])
     vector<interval_t>::iterator iter = intervals.begin();
     BOOST_FOREACH (combo_t &combo, g_below[0][0])
     {
-        if (iter->first < iter->second)
+        int duplications = combo.first;
+        int transfers = combo.second;
+        rational_t lower_r = iter->first;
+        rational_t upper_r = iter->second;
+        double lower_d = boost::rational_cast<double>(lower_r);
+        double upper_d = boost::rational_cast<double>(upper_r);
+        
+        if (lower_r < upper_r)
         {
             cout << "+";
         }
-        else if (iter->first == iter->second)
+        else if (lower_r == upper_r)
         {
             cout << ".";
         }
@@ -250,25 +257,30 @@ main(int argc, char *argv[])
         }
 
         rational_t::int_type common_denominator =
-            boost::lcm(iter->first.denominator(), iter->second.denominator());
-        rational_t::int_type lower_numerator = iter->first.numerator() *
-            common_denominator / iter->first.denominator();
-        rational_t::int_type upper_numerator = iter->second.numerator() *
-            common_denominator / iter->second.denominator();
-        
+            boost::lcm(lower_r.denominator(), upper_r.denominator());
+        rational_t::int_type lower_numerator = lower_r.numerator() *
+            common_denominator / lower_r.denominator();
+        rational_t::int_type upper_numerator = upper_r.numerator() *
+            common_denominator / upper_r.denominator();
 
-        cout << setw(6) << combo.first
-             << setw(6) << combo.second
+        cout << setw(6) << duplications
+             << setw(6) << transfers
+
              << setw(6) << lower_numerator
              << "/"
              << setw(6) << left << common_denominator << right
+
              << setw(6) << upper_numerator
              << "/"
              << setw(6) << left << common_denominator << right
-             << setw(6) << setprecision(3) << double(lower_numerator) / common_denominator
-             << setw(6) << setprecision(3) << double(upper_numerator) / common_denominator
-             << setw(6) << setprecision(3) << (combo.first * lower_numerator + combo.second * upper_numerator) / double(common_denominator)
-             << "\n";
+
+             << setw(8) << setprecision(3) << lower_d
+             << setw(8) << setprecision(3) << upper_d;
+        
+        double min_score =
+            min((duplications - transfers) * lower_d + transfers,
+                (duplications - transfers) * upper_d + transfers);
+        cout << setw(6) << setprecision(3) << min_score << "\n";
 
         ++iter;
     }
