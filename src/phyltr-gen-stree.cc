@@ -43,7 +43,6 @@ struct Node {
     }
 };
 
-
 //============================================================================
 //                   Global Constants and variables.
 //============================================================================
@@ -57,12 +56,22 @@ const unsigned LENGTH_PRECISION = 4;    // The precision with which
 
 boost::program_options::variables_map g_options;
 
-unsigned max_attempts = 1000000;             // The maximum number of times the
-                                        // process will be run if the
-                                        // species goes extinct.
+unsigned max_attempts = 0;              // The maximum number of times the
+                                        // process will be run.
+
 //=============================================================================
 //                        Function declarations
 //=============================================================================
+
+/*
+ * acceptable_species_tree()
+ *
+ * Returns true if the species tree produced by the process is
+ * acceptable according to the options, i.e., if the species tree is
+ * not empty, it has more than min-size leaves, etc.
+ */
+bool acceptable_species_tree(const Node_ptr stree_root,
+                             const vector<Node_ptr> &leaves);
 
 /*
  * print_tree()
@@ -102,7 +111,13 @@ main(int argc, char *argv[])
         {
             /* Declare visible options */
             visible_opts.add_options()
-                ("help,h", "display this help and exit")
+                ("help,h", "Display this help and exit")
+                ("min-size",
+                 po::value<unsigned>(),
+                 "The minimum number of leaves required")
+                ("max-size",
+                 po::value<unsigned>(),
+                 "The maximum number of leaves allowed")
                 ("start-with-speciation,s",
                  "If set, the birth-death process starts with a speciation")
                 ("max-attempts,a",
@@ -182,6 +197,25 @@ main(int argc, char *argv[])
             exit(EXIT_FAILURE);
         }
 
+    /* Check that min-size <= max-size if given and that max-size > 0. */
+    if (g_options.count("min-size") && g_options.count("max-size"))
+        {
+            if (g_options["min-size"].as<unsigned>() >
+                g_options["max-size"].as<unsigned>())
+                {
+                    cerr << PROG_NAME << ": --min-size must be less than "
+                         << "or equal to --max-size\n";
+                    exit(EXIT_FAILURE);
+                }
+        }
+
+    if (g_options.count("max-size") &&
+        g_options["max-size"].as<unsigned>() == 0)
+        {
+            cerr << PROG_NAME << ": --max-size must be a positive integer.\n";
+            exit(EXIT_FAILURE);
+        }
+
     /*
      * We now have everthing we need. Create the tree!
      */
@@ -192,7 +226,8 @@ main(int argc, char *argv[])
     Node_ptr root(new Node(T, null, null, null));
 
     int attempts = max_attempts;
-    while (leaves.size() == 0 && attempts--)
+    bool species_tree_accepted = false;
+    while (attempts--)
         {
             /*
              * We will keep track of the root and the set of leaves at
@@ -200,6 +235,7 @@ main(int argc, char *argv[])
              * time T and therefore we don't need to set their times at the
              * end of the process.
              */
+            leaves.clear();
             leaves.push_back(root);
             double cur_time = 0;        // Keeps track of the current time.
             // cur_time <= T at all times.
@@ -283,13 +319,19 @@ main(int argc, char *argv[])
                             leaves.pop_back();
                         }
                 }
+
+            if (acceptable_species_tree(root, leaves))
+                {
+                    species_tree_accepted = true;
+                    break;
+                }
         }
 
     /* Print error message if all species went extinct. (what else?) */
-    if (leaves.empty())
+    if (!species_tree_accepted)
         {
             cerr << PROG_NAME
-                 << ": The species became extinct during all "
+                 << ": No acceptable species tree was produced in "
                  << max_attempts << " runs of the process\n";
             exit(EXIT_FAILURE);
         }
@@ -310,6 +352,29 @@ void print_length(Node_ptr node, bool output_lengths);
 //=============================================================================
 //                   Function and member definitions.
 //=============================================================================
+
+bool
+acceptable_species_tree(const Node_ptr stree_root,
+                        const vector<Node_ptr> &leaves)
+{
+    if (leaves.size() == 0)
+        return false;
+
+    if (g_options.count("min-size") &&
+        leaves.size() < g_options["min-size"].as<unsigned>())
+        {
+            return false;
+        }
+
+    if (g_options.count("max-size") &&
+        leaves.size() > g_options["max-size"].as<unsigned>())
+        {
+            return false;
+        }
+
+    return true;
+}
+
 
 void
 print_tree(Node_ptr root, bool output_lengths)
@@ -332,7 +397,7 @@ print_tree(Node_ptr root, bool output_lengths)
     next_leaf_id = print_tree_r(root->right, next_leaf_id, output_lengths);
     cout << ")";
     print_length(root, output_lengths);
-    cout << root->time << ";\n";
+    cout << ";\n";
 }
 
 unsigned
