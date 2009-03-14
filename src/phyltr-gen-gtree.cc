@@ -134,10 +134,10 @@ void speciate(const Tree_type      &stree,
 /*
  * acceptable_gene_tree()
  *
- * Returns true if the gene tree produced by the process is
- * acceptable, i.e., if the gene tree is not empty and it is not the
- * case that the --sane-scenarios-only flag has been given and the
- * scenario is not sane.
+ * Returns true if the gene tree produced by the process is acceptable
+ * according to the options, i.e., if the gene tree is not empty,
+ * it is not the case that the --sane-scenarios-only flag has been
+ * given and the scenario is not sane, and perhaps other conditions.
  */
 bool acceptable_gene_tree(const Tree_type &stree);
 
