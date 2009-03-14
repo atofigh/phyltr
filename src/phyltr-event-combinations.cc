@@ -49,10 +49,16 @@ typedef rational<long>                  rational_t;
 typedef pair<rational_t, rational_t>    interval_t;
 
 const string PROGRAM_NAME = "phyltr-event-combinations";
-const string USAGE =
-    "Usage: " + PROGRAM_NAME + " [OPTION]... SPECIES-TREE-FILE GENE-TREE-FILE "
-    "MAP-FILE";
-
+const string USAGE = "Usage: " + PROGRAM_NAME + 
+    " [OPTION]... SPECIES-TREE-FILE GENE-TREE-FILE MAP-FILE\n"
+    "\n"
+    "Output consists of one line for each possible event count pair.\n"
+    "Each line consists of five columns: The first column contains\n"
+    "a '+', '.', or '-' depending on whether the event count pair is\n"
+    "optimal in an interval, a single point, or is never optimal,\n"
+    "respectively. The other columns comtain the number of duplications,\n"
+    "the number of transfers, and the lower and upper limits of the\n" 
+    "duplication cost in which the event count pair is optimal.\n";
 
 
 //*****************************************************************************
