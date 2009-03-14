@@ -50,8 +50,8 @@ typedef pair<rational_t, rational_t>    interval_t;
 
 const string PROGRAM_NAME = "phyltr-event-combinations";
 const string USAGE =
-    "Usage: " + PROGRAM_NAME + " [OPTION]... SPECIES_TREE_FILE GENE_TREE_FILE "
-    "MAP_FILE";
+    "Usage: " + PROGRAM_NAME + " [OPTION]... SPECIES-TREE-FILE GENE-TREE-FILE "
+    "MAP-FILE";
 
 
 

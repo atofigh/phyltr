@@ -50,8 +50,8 @@ typedef float                   cost_type; // Instead of double to save memory.
 
 const string PROGRAM_NAME = "phyltr-dp";
 const string USAGE =
-    "Usage: " + PROGRAM_NAME + " [OPTION]... SPECIES_TREE_FILE GENE_TREE_FILE "
-    "MAP_FILE";
+    "Usage: " + PROGRAM_NAME + " [OPTION]... SPECIES-TREE-FILE GENE-TREE-FILE "
+    "MAP-FILE";
 
 
 

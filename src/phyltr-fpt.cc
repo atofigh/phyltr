@@ -42,8 +42,8 @@ typedef tree_type::vid_t        vid_t;
 
 const string PROGRAM_NAME = "phyltr-fpt";
 const string USAGE =
-    "Usage: " + PROGRAM_NAME + " [OPTION]... SPECIES_TREE_FILE GENE_TREE_FILE "
-    "MAP_FILE MIN_COST MAX_COST";
+    "Usage: " + PROGRAM_NAME + " [OPTION]... SPECIES-TREE-FILE GENE-TREE-FILE "
+    "MAP-FILE MIN-COST MAX-COST";
 
 
 
