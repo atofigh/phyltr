@@ -139,7 +139,8 @@ void speciate(const Tree_type      &stree,
  * it is not the case that the --sane-scenarios-only flag has been
  * given and the scenario is not sane, and perhaps other conditions.
  */
-bool acceptable_gene_tree(const Tree_type &stree);
+bool acceptable_gene_tree(unsigned n_leaves,
+                          const Tree_type &stree);
 
 /*
  * print_gtree(), print_sigma(), print_gamma(), print_events()
@@ -176,6 +177,12 @@ main(int argc, char *argv[])
             /* Declare visible options */
             visible_opts.add_options()
                 ("help,h", "display this help and exit")
+                ("min-size",
+                 po::value<unsigned>(),
+                 "The minimum number of leaves required")
+                ("max-size",
+                 po::value<unsigned>(),
+                 "The maximum number of leaves allowed")
                 ("root-length,r", po::value<double>(),
                  "If not set, the birth-death process starts according to the length of "
                  "the root of the species tree. E.g., if you want to force the process "
@@ -311,6 +318,24 @@ main(int argc, char *argv[])
             exit(EXIT_FAILURE);
         }
     
+    /* Check that min-size <= max-size if given and that max-size > 0. */
+    if (g_options.count("min-size") && g_options.count("max-size"))
+        {
+            if (g_options["min-size"].as<unsigned>() >
+                g_options["max-size"].as<unsigned>())
+                {
+                    cerr << PROG_NAME << ": --min-size must be less than "
+                         << "or equal to --max-size\n";
+                    exit(EXIT_FAILURE);
+                }
+        }
+
+    if (g_options.count("max-size") &&
+        g_options["max-size"].as<unsigned>() == 0)
+        {
+            cerr << PROG_NAME << ": --max-size must be a positive integer.\n";
+            exit(EXIT_FAILURE);
+        }
 
     /*
      * Read the species tree.
@@ -417,6 +442,7 @@ main(int argc, char *argv[])
 
             /* Create a vector that will keep track of the leaves of the gene tree. */
             vector<Node_ptr> cur_genes;
+            unsigned n_leaves = 0;
 
             /* Create a vector keeping track of the current edges of the slice. */
             vector<vid_t> slice;
@@ -467,6 +493,7 @@ main(int argc, char *argv[])
                                 remove_if(cur_genes.begin(),
                                           cur_genes.end(),
                                           &*_1 ->* &Node::stree_label == cur_snode);
+                            n_leaves += distance(new_end, cur_genes.end());
                             cur_genes.erase(new_end, cur_genes.end());
 
                             swap(slice[idx], slice.back());
@@ -477,7 +504,7 @@ main(int argc, char *argv[])
                             speciate(stree, slice, idx, cur_genes);
                         }
                 }
-            if (acceptable_gene_tree(stree))
+            if (acceptable_gene_tree(n_leaves, stree))
                 {
                     gene_tree_accepted = true;
                     break;
@@ -543,7 +570,8 @@ bool genes_in_all_species(const Tree_type &stree);
 //=============================================================================
 
 bool
-acceptable_gene_tree(const Tree_type &stree)
+acceptable_gene_tree(unsigned n_leaves,
+                     const Tree_type &stree)
 {
     if (!gtree_root)
         return false;
@@ -553,6 +581,18 @@ acceptable_gene_tree(const Tree_type &stree)
 
     if (all_species && !genes_in_all_species(stree))
         return false;
+
+    if (g_options.count("min-size") &&
+        n_leaves < g_options["min-size"].as<unsigned>())
+        {
+            return false;
+        }
+
+    if (g_options.count("max-size") &&
+        n_leaves > g_options["max-size"].as<unsigned>())
+        {
+            return false;
+        }
 
     return true;
 }
