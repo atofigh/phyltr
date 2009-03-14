@@ -277,14 +277,9 @@ main(int argc, char *argv[])
              << setw(8) << setprecision(3) << lower_d
              << setw(8) << setprecision(3) << upper_d;
         
-        double min_score =
-            min((duplications - transfers) * lower_d + transfers,
-                (duplications - transfers) * upper_d + transfers);
-        cout << setw(6) << setprecision(3) << min_score << "\n";
-
+        cout << "\n";
         ++iter;
     }
-
 
     return EXIT_SUCCESS;
 }
