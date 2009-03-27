@@ -175,6 +175,7 @@ struct ProgramInput {
     vector<unsigned>        gene_tree_numbering;
     double                  duplication_cost;
     double                  transfer_cost;
+    bool                    unsorted;
 } g_input;
 
 
@@ -298,7 +299,10 @@ main(int argc, char *argv[])
     fpt_algorithm(scenarios);
 
     // Sort and print the scenarios
-    sort(scenarios.begin(), scenarios.end());
+    if (!g_input.unsorted)
+        {
+            sort(scenarios.begin(), scenarios.end());
+        }
     BOOST_FOREACH (Scenario &sc, scenarios)
         {
             cout << sc << "\n";
@@ -417,6 +421,9 @@ parse_options(int argc, char*argv[])
         ("duplication-cost,d",
          po::value<double>(&g_input.duplication_cost)->default_value(1.0),
          "Cost of duplication events")
+        ("unsorted",
+         po::bool_switch(&g_input.unsorted)->default_value(false),
+         "If set, the scenarios will not be sorted") ;
         ;
 
     // Declare the positional options
@@ -934,10 +941,11 @@ Candidate::is_elegant() const
     // Check that the children of duplications are mapped by lambda to
     // comparable species tree vertices. Otherwise, the duplication is
     // unnecessary.
-    for (vid_t d = duplications_.find_first();
-         d != duplications_.npos;
-         d = duplications_.find_next(d))
+    for (dynamic_bitset<>::size_type dd = duplications_.find_first();
+         dd != duplications_.npos;
+         dd = duplications_.find_next(dd))
         {
+            vid_t d = dd;
             vid_t v = G.left(d);
             vid_t w = G.right(d);
             if (!S.descendant(lambda_[v], lambda_[w]) && 
@@ -948,10 +956,11 @@ Candidate::is_elegant() const
     // Check if the parents of transfer vertices can be mapped high
     // enough so that the transfer can be converted to a
     // speciation. If so, the transfer is unnecessary.
-    for (vid_t v = transfer_edges_.find_first();
-         v != transfer_edges_.npos;
-         v = transfer_edges_.find_next(v))
+    for (dynamic_bitset<>::size_type vv = transfer_edges_.find_first();
+         vv != transfer_edges_.npos;
+         vv = transfer_edges_.find_next(vv))
         {
+            vid_t v = vv;
             // Let (u, v) be the transfer edge we are considering, let
             // pu = p(u), and x = lca{lambda_[u], lambda_[v]}
             vid_t u = G.parent(v);

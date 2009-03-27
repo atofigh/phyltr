@@ -223,6 +223,7 @@ struct ProgramInput {
     bool                    print_only_cost;
     bool                    print_only_minimal_transfer_scenarios;
     bool                    print_only_minimal_loss_scenarios;
+    bool                    unsorted;
 } g_input;
 
 
@@ -439,13 +440,15 @@ main(int argc, char *argv[])
         {
             vector<Scenario> scenarios;
             backtrack(scenarios);
-            sort(scenarios.begin(), scenarios.end());
+            if (!g_input.unsorted)
+                {
+                    sort(scenarios.begin(), scenarios.end());
+                }
             BOOST_FOREACH (Scenario sc, scenarios)
                 {
                     cout << sc << "\n";
                 }
         }
-
 
 
     return EXIT_SUCCESS;
@@ -493,7 +496,10 @@ parse_options(int argc, char*argv[])
          "of losses are printed. This option may be combined with "
          "--minimum-transfers in which case only the scenarios with minimal "
          "losses among those with minimum number of transfers are written. "
-         "In other words, transfers are minimized first.") ;
+         "In other words, transfers are minimized first.") 
+        ("unsorted",
+         po::bool_switch(&g_input.unsorted)->default_value(false),
+         "If set, the scenarios will not be sorted") ;
 
     // Declare the positional options
     hidden_opts.add_options()
