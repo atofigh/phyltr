@@ -14,6 +14,8 @@ extern "C" {
 #include <boost/program_options.hpp>
 #include <boost/foreach.hpp>
 #include <boost/lambda/lambda.hpp>
+#include <boost/shared_ptr.hpp>
+#include <boost/weak_ptr.hpp>
 #include <cstdlib>
 #include <errno.h>
 #include <vector>
@@ -39,6 +41,7 @@ typedef Tree_type::vid_t            vid_t;
 
 struct Node;
 typedef boost::shared_ptr<Node>     Node_ptr;
+typedef boost::weak_ptr<Node>       Node_ptr_weak;
 
 /*
  * Class Node
@@ -50,12 +53,13 @@ struct Node {
     enum Event {none, duplication, transfer, speciation};
     static unsigned next_id;
 
-    Node_ptr    parent, left, right;
-    vid_t       stree_label;
-    Event       event;
-    double      edge_time;
-    bool        edge_is_transfer;
-    unsigned    id;
+    Node_ptr_weak   parent;
+    Node_ptr        left, right;
+    vid_t           stree_label;
+    Event           event;
+    double          edge_time;
+    bool            edge_is_transfer;
+    unsigned        id;
 
     Node(Node_ptr p, Node_ptr l, Node_ptr r,
          vid_t label, Event e, double t, bool transfer)
@@ -605,12 +609,13 @@ is_sane(Node_ptr n, const Tree_type &stree)
         return false;
 
     vid_t x = n->stree_label;
+    Node_ptr parent = n->parent.lock();
 
     /* The head of a transfer edge must be placed at an incomparable
        stree vertex compared to the tail. */
-    if (n->edge_is_transfer && n->parent)
+    if (n->edge_is_transfer && parent)
         {
-            vid_t p = n->parent->stree_label;
+            vid_t p = parent->stree_label;
             if (stree.descendant(x, p))
                 return false;
         }
@@ -762,8 +767,8 @@ advance_process(double time,
                         }
 
                     /* Rewire pointers to remove chosen gene. */
-                    Node_ptr parent = chosen->parent;
-                    Node_ptr grand_parent = parent->parent;
+                    Node_ptr parent = chosen->parent.lock();
+                    Node_ptr grand_parent = parent->parent.lock();
                     Node_ptr sibling =
                         parent->left == chosen ? parent->right : parent->left;
                     sibling->parent = grand_parent;
@@ -898,10 +903,15 @@ print_events(ostream &out, const Tree_type &stree)
                         {
                             out << i << " ";
                         }
-                    else if (!stree.descendant(gtree_postorder[i]->stree_label,
-                                               gtree_postorder[i]->parent->stree_label))
+                    else 
                         {
-                            out << i << " ";
+                            Node_ptr node = gtree_postorder[i];
+                            Node_ptr parent = gtree_postorder[i]->parent.lock();
+                            if (!stree.descendant(node->stree_label,
+                                                  parent->stree_label))
+                                {
+                                    out << i << " ";
+                                }
                         }
                 }
         }
