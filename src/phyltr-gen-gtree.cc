@@ -108,6 +108,10 @@ bool only_sane_scenarios = false;
 
 /* The "all-species" flag. */
 bool all_species= false;
+
+/* The seed used to initiate the random number generator. */
+unsigned seed = 0;
+
 //=============================================================================
 //                        Function declarations
 //=============================================================================
@@ -152,6 +156,7 @@ bool acceptable_gene_tree(unsigned n_leaves,
  * Functions used for outputting the result of the birth-death
  * process.
  */
+void print_arguments(ostream &out, int argc, char *argv[]);
 void print_gtree(ostream &out, const Tree_type &stree);
 void print_sigma(ostream &out, const Tree_type &stree);
 void print_gamma(ostream &out, const Tree_type &stree);
@@ -278,11 +283,11 @@ main(int argc, char *argv[])
     
     if (g_options.count("seed"))
         {
-            init_rand(g_generator, g_options["seed"].as<unsigned>());
+            seed = init_rand(g_generator, g_options["seed"].as<unsigned>());
         }
     else
         {
-            init_rand(g_generator);
+            seed = init_rand(g_generator);
         }
 
 
@@ -526,11 +531,12 @@ main(int argc, char *argv[])
 
 
     /*
-     * Output the result to the files prefix.gtree, prefix.sigma,
-     * prefix.gamma, and prefix.events.
+     * Output the result to the files prefix.args, prefix.gtree,
+     * prefix.sigma, prefix.gamma, and prefix.events.
      */
     
     vector<string> filenames;
+    filenames.push_back(file_prefix + ".args");
     filenames.push_back(file_prefix + ".gtree");
     filenames.push_back(file_prefix + ".sigma");
     filenames.push_back(file_prefix + ".gamma");
@@ -550,10 +556,11 @@ main(int argc, char *argv[])
                 }
         }
 
-    print_gtree(*outfiles[0], stree);
-    print_sigma(*outfiles[1], stree);
-    print_gamma(*outfiles[2], stree);
-    print_events(*outfiles[3], stree);
+    print_arguments(*outfiles[0], argc, argv);
+    print_gtree(*outfiles[1], stree);
+    print_sigma(*outfiles[2], stree);
+    print_gamma(*outfiles[3], stree);
+    print_events(*outfiles[4], stree);
 
     return EXIT_SUCCESS;
 }
@@ -825,6 +832,17 @@ speciate(const Tree_type       &stree,
             cur_genes[i] = g1;
             cur_genes.push_back(g2);
         }
+}
+
+void
+print_arguments(ostream &out, int argc, char *argv[])
+{
+    for (int i = 1; i < argc - 1; ++i)
+        {
+            out << argv[i] << " ";
+        }
+    out << argv[argc - 1] << "\n";
+    out << "seed: " << seed << "\n";
 }
 
 void

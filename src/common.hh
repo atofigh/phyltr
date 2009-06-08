@@ -134,13 +134,13 @@ extern boost::variate_generator<boost::mt19937&, boost::uniform_real<> > g_rng_d
  *
  * initializes the random number generator using gettimeofday() or a
  * supplied seed. 'engine' must have a seed-method taking an unsigned
- * int as argument.
+ * int as argument. The seed used is returned.
  */
 template <class RandomNumberGenerator>
-void init_rand(RandomNumberGenerator &engine);
+unsigned init_rand(RandomNumberGenerator &engine);
 
 template <class RandomNumberGenerator>
-void init_rand(RandomNumberGenerator &engine, unsigned seed);
+unsigned init_rand(RandomNumberGenerator &engine, unsigned seed);
 
 
 

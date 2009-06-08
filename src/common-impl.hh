@@ -133,7 +133,7 @@ operator<<(std::ostream &out, const Binary_tree<T> &tree)
 
 
 template <class RandomNumberGenerator>
-void
+unsigned
 init_rand(RandomNumberGenerator &engine)
 {
     /*
@@ -143,16 +143,18 @@ init_rand(RandomNumberGenerator &engine)
     gettimeofday(&tv, 0);
     unsigned seed = tv.tv_sec * 1000000 + tv.tv_usec;
     engine.seed(seed);
+    return seed;
 }
 
 template <class RandomNumberGenerator>
-void
+unsigned
 init_rand(RandomNumberGenerator &engine, unsigned seed)
 {
     /*
      * Seed the random number generator.
      */
     engine.seed(seed);
+    return seed;
 }
 
 
