@@ -295,7 +295,6 @@ main(int argc, char *argv[])
                         }
                     else                                        //death
                         {
-                            cout << "hej\n";
                             if (leaves.size() == 1)
                                 {
                                     leaves.pop_back();
