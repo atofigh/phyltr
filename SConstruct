@@ -1,13 +1,13 @@
 import os, sys
 
 # Set up the command line options of the SConstruct file
-opts = Options()
-opts.AddOptions(
-    BoolOption('profile', 'compile with -pg -O2 and without -g', 'False'),
-    BoolOption('debug', 'compile with -g without optimizations', 'False'),
-    BoolOption('release', 'compile with -O2 without -g', 'False'),
-    PathOption('boost', 'where the root of boost is installed', '/usr'),
-    PathOption('NHparser', 'where the root of NHparser is installed', '/usr')
+opts = Variables()
+opts.AddVariables(
+    BoolVariable('profile', 'compile with -pg -O2 and without -g', 'False'),
+    BoolVariable('debug', 'compile with -g without optimizations', 'False'),
+    BoolVariable('release', 'compile with -O2 without -g', 'False'),
+    PathVariable('boost', 'where the root of boost is installed', '/usr'),
+    PathVariable('NHparser', 'where the root of NHparser is installed', '/usr')
     )
 env = Environment(options = opts)
 Help(opts.GenerateHelpText(env))
