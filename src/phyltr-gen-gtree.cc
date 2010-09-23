@@ -8,9 +8,7 @@
 
 #include "common.hh"
 
-extern "C" {
-#include <NHparser.h>
-}
+#include <NHparser/NHparser.h>
 #include <boost/program_options.hpp>
 #include <boost/foreach.hpp>
 #include <boost/lambda/lambda.hpp>

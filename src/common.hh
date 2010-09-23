@@ -9,9 +9,7 @@
 #define COMMON_HH
 
 #include "utils/binary-tree.hh"
-extern "C" {
-#include <NHtypes.h>
-}
+#include <NHparser/NHtypes.h>
 #include <string>
 #include <iosfwd>
 #include <vector>

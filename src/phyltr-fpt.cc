@@ -21,9 +21,7 @@
 
 #include "common.hh"
 #include "utils/binary-tree.hh"
-extern "C" {
-#include <NHparser.h>
-}
+#include <NHparser/NHparser.h>
 
 
 
