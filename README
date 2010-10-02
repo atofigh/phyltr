@@ -1,0 +1,158 @@
+Copyright (c) 2010, Ali Tofigh
+See the end of the file for license conditions
+
+                                 PhylTr
+                                 ******
+
+1. Introduction
+===============
+
+PhylTr is a bioinformatics package for reconciliation of gene and
+species trees with respect to gene duplications, lateral gene transfers
+(a.k.a. horizontal gene transfers), and speciations. PhylTr was
+designed, written, and is being maintained by Ali Tofigh
+<alix.tofigh@gmail.com>.
+
+
+2. Installation
+===============
+
+The PhylTr package uses the library NHparser for reading trees. You
+should first compile and install NHparser before proceeding to compile
+PhylTr. PhylTr also depends on the boost library, version 1.34 or
+higher. You can obtain boost from http://www.boost.org.
+
+The PhylTr package uses the GNU autotools for building and
+installation. Please see the file INSTALL for general instructions. For
+the impatient try
+
+$ ./configure && make && make install
+
+This will install the binaries in standard system locations (e.g.,
+/usr/include and /usr/lib). If you do not have write permissions to the
+system directories, you can install the binaries in a local directory of
+your choice:
+
+$ ./configure --prefix=/path/to/install/location && make && make install
+
+Also, try
+
+$ ./configure --help
+
+for more information about setting environment and compiler flags. Use
+the --with-boost and --with-NHparser options to help configure find the
+boost and NHparser libraries if they are installed in non-standard
+locations.
+
+
+3. Usage
+========
+
+All programs in the PhylTr package assume that trees (both species and
+gene trees) are rooted. Trees are read in Newick/New Hampshire
+format. For example here is a species tree with 5 species:
+
+(((s1, s2), s3), (s4, s5));
+
+And here is a corresponding gene tree:
+
+(((s1_1, s2_1), (s3_1, ((s4_1, s5_1), (s1_2, s2_2)))), s4_2);
+
+To let the programs know which extant gene corresponds to which species,
+a so called sigma file is needed that maps each gene name to a species name:
+
+s1_1    s1
+s2_1    s2
+s3_1    s3
+s4_1    s4
+s5_1    s5
+s1_2    s1
+s2_2    s2
+s4_2    s4
+
+Assuming that the files stree, gtree, and sigma contain the species
+tree, gene tree, and gene-to-species mapping defined above, we can run
+the phyltr-dp program as shown below:
+
+------------------------------------------
+$ phyltr-dp stree gtree sigma
+Transfer edges:	6
+Duplications:	12
+Number of losses: 2
+
+Transfer edges:	6 10
+Duplications:	
+Number of losses: 1
+
+Transfer edges:	9 10
+Duplications:	
+Number of losses: 1
+------------------------------------------
+
+In this case there are three most parsimonious reconciliations between
+the trees. One with a single transfer edge, and two with two transfer
+edges. The numbers after "Transfer edges:" and "Duplications:" refer to
+the vertices of the gene tree. The vertices of the gene tree are
+numbered postorder and from left to right, so that the left-most leaf
+has number 0. The numbering can also be deduced by looking at the
+newick-file and number the vertices from left to right. Below, the
+numbers of all the vertices of the gene tree have been added (in place
+of edge-lenghts):
+
+(((s1_1:0, s2_1:1):2, (s3_1:3 , ((s4_1:4, s5_1:5):6, (s1_2:7, 
+s2_2:8):9):10):11):12, s4_2:13):14;
+
+The program identifies a transfer edge using the vertex farthest away 
+from the root. So, for example, in the first reconciliation, the 
+transfer edge 6 refers to the incoming edge of the parent of s5_1.
+
+There are two programs implementing two different algorithms for finding
+reconciliations. phyltr-dp implements the dynamic programming algorithm
+which finds the most parsimonious scenarios. phyltr-fpt implements the
+fixed-parameter-tractable algorithm which is able to also find
+non-parsimonious scenarios. The fpt-algorithm will be noticably slower
+for large instances. Do
+
+$ phyltr-dp -h
+
+and
+
+$ phyltr-fpt -h
+
+for help on command-line options, such as setting separate costs for
+duplication and transfer events.
+
+The programs phyltr-gen-stree and phyltr-gen-gtree are used to generate
+species and gene trees using a stochastic birth-death process. See
+
+$ phyltr-gen-gtree -h
+
+and
+
+$ phyltr-gen-stree -h
+
+for more information.
+
+Finally, the program phyltr-event-combination implements the parametric
+algorithm, whose description is outside the scope of this small README
+file. Hopefully, more documenation will be added soon.
+
+
+4. Known Issues
+===============
+
+- There is no documentation beside this README file.
+
+
+5. Reporting Bugs
+=================
+
+Any suggestions, requests for enhancements, or bug reports can be sent
+directly to the author via electronic mail: <alix.tofigh@gmail.com>.
+
+
+6. License
+==========
+
+PhylTr is released under the terms of the license contained in the file
+LICENSE.
