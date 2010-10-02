@@ -1,8 +1,14 @@
 #! /usr/bin/env python
 
-import sys, os, tempfile
+import sys, os, os.path, tempfile
 
-sys.path.append('../scripts')
+if len(sys.argv) != 3:
+    print >> sys.stderr, "Usage: python test.py <scripts dir> <bin dir>"
+    sys.exit(1)
+
+scriptsdir = sys.argv[1]
+bindir = sys.argv[2]
+sys.path.append(scriptsdir)
 
 from phyltr import *
 
@@ -42,7 +48,7 @@ for s_size in range(2, 15):
             (s, g, sigma) = create_and_write_random_input(s_size, g_size,
                                                           s_file, g_file, sigma_file)
 
-            infile = os.popen('../bin/phyltr-event-combinations ' + file_names, 'r')
+            infile = os.popen(os.path.join(bindir, 'phyltr-event-combinations ') + file_names, 'r')
             combo_lines = infile.readlines()
             infile.close();
 
@@ -62,7 +68,7 @@ for s_size in range(2, 15):
                 cost_dup = lower_numer + upper_numer
                 cost_transfer = denominator - lower_numer + denominator - upper_numer
 
-                infile = os.popen('../bin/phyltr-dp' + ' -d ' + str(cost_dup)
+                infile = os.popen(os.path.join(bindir, 'phyltr-dp') + ' -d ' + str(cost_dup)
                                   + ' -t ' + str(cost_transfer) + ' '
                                   + file_names, 'r')
                 dp_lines = [l.split() for l in infile if len(l.strip()) != 0]
@@ -110,7 +116,7 @@ for s_size in range(2, 15):
             for (key, events_set) in events.iteritems():
                 cost_dup = key.numerator
                 cost_transfer = key.denominator - key.numerator
-                infile = os.popen('../bin/phyltr-dp' + ' -d ' + str(cost_dup)
+                infile = os.popen(os.path.join(bindir, 'phyltr-dp') + ' -d ' + str(cost_dup)
                                   + ' -t ' + str(cost_transfer) + ' '
                                   + file_names, 'r')
                 
@@ -148,16 +154,16 @@ for s_size in range(2, 15):
             (s, g, sigma) = create_and_write_random_input(s_size, g_size,
                                                           s_file, g_file, sigma_file)
 
-            infile = os.popen('../bin/phyltr-dp -c ' + file_names, 'r')
+            infile = os.popen(os.path.join(bindir, 'phyltr-dp ') + '-c ' + file_names, 'r')
             opt_cost = int(infile.read())
             infile.close()
 
-            infile = os.popen("../bin/phyltr-dp " + file_names)
+            infile = os.popen(os.path.join(bindir, "phyltr-dp ") + file_names)
             res_dp_file.writelines(infile.readlines())
             infile.close()
             res_dp_file.flush()
 
-            infile = os.popen("../bin/phyltr-fpt " + file_names + " " +
+            infile = os.popen(os.path.join(bindir, "phyltr-fpt ") + file_names + " " +
                               str(opt_cost) + " " + str(opt_cost))
             res_fpt_file.writelines(infile.readlines())
             infile.close()
