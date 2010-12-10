@@ -15,9 +15,8 @@
  * [ type Binary_tree ]: The class Binary_tree implements the full
  * rooted binary tree concept. Furthermore, a unique string label may
  * be attached to any vertex. An empty string implies no label. Every
- * edge has a positive length. In addition, the root vertex is
- * considered as having an incoming edge, but this edge is allowed to
- * have a length of zero.
+ * edge has a non-negative length. In addition, the root vertex is
+ * considered as having an incoming edge.
  *
  * The template parameter must be a type behaving like a
  * floating-point type. For now, the code checks that
@@ -32,13 +31,13 @@
  *
  * Invariants:
  * 1. size() >= 1 (There is always a root.)
- * 2. The root's id is always zero.
- * 3. All vertices have unique non-negative ids.
+ * 2. All vertices have unique non-negative ids.
+ * 3. The root's id is always zero.
  * 4. Vertex labels are unique (except for the empty string).
  * 5. if v is a valid vertex, either left(v)==right(v)==NONE, or
  *    left(v) and right(v) are both valid vertices.
  * 6. label_map[str] == v  <==>  label(v) == str.
- * 7. All edge lengths are valid positive real numbers (except the
+ * 7. All edge lengths are valid non-negative real numbers (except the
  *    root edge which may be zero). Valid means not +-inf or Nan.
  */
 
@@ -93,7 +92,7 @@ public:
      *
      * Preconditions:
      * 1. 'parent' exists.
-     * 2. 'left_len' and 'right_len' are valid positive reals.
+     * 2. 'left_len' and 'right_len' are valid non-negative reals.
      * 3. Labels assigned to vertices must be unique (except for "").
      * 4. 'parent' must be a leaf.
      */
@@ -120,10 +119,9 @@ public:
     vid_t operator[](std::string label) const;
 
     /*
-     * [ left/right/parent ]: These functions return the id of the
-     * left child, right child and the parent of 'vertex'
-     * respectively. If such a vertex does not exist, these functions
-     * will return NONE.
+     * [ left/right/parent ]: These functions return the id of the left
+     * child, right child, and parent of 'vertex', respectively. If such
+     * a vertex does not exist, NONE is returned.
      *
      * Precondition:
      * 1. 'vertex' is a valid vertex id.
@@ -232,7 +230,7 @@ public:
      * the precomputation has to be redone!
      *
      * The algorithm is from the article 'Lowest common ancestors in
-     * trees and directed acyclic graphs' by M Bender et al, 2005.
+     * trees and directed acyclic graphs' by M Bender et al., 2005.
      *
      * Precondition:
      * 1. 'v1' and 'v2' are valid vertex ids.
