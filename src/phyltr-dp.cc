@@ -112,7 +112,7 @@ ostream &operator<<(ostream &, const Scenario &);
 //      The optimum cost can be achieved by placing u at a descendant
 //      of the left child of x.
 //
-// BELOW_LEFT
+// BELOW_RIGHT
 //      The optimum cost can be achieved by placing u at a descendant
 //      of the right child of x.
 //
@@ -136,7 +136,7 @@ ostream &operator<<(ostream &, const Scenario &);
 //      programming algorithm.
 //
 // min_transfers:
-//      The minimum number of transfer required for obtaining the
+//      The minimum number of transfers required for obtaining the
 //      optimum cost of placing u at a descendant of x. This is used
 //      when the --minimum-transfers flag has been set.
 //
@@ -191,7 +191,7 @@ public:
 //
 // g_below
 // g_outside
-//      One of the DP matrices. For a gene tree vertex u and a species
+//      The DP matrices. For a gene tree vertex u and a species
 //      tree vertex x, g_below[u][x] is the minimum cost of placing u
 //      at a descendant of x (possibly at x itself), and
 //      g_outside[u][x] is the minimum cost of placing u at a vertex
@@ -270,7 +270,7 @@ bool check_input();
 // The functions read the files whose name is given in
 // g_input.species_tree_fname and g_input.gene_tree_fname, and
 // attempt to construct binary trees. If errors are detected, an
-// apropriate error message is written to stderr and false is
+// appropriate error message is written to stderr and false is
 // returned. Otherwise, true is returned.
 //*****************************************************************************
 bool read_species_tree();
