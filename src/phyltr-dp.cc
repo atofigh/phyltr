@@ -965,9 +965,11 @@ backtrack_below_placements(vid_t u, vid_t x)
             const bitset<BacktrackElement::N_EVENTS> &e = elem.below_events;
 
             // First, determine if u is placed _at_ x.
-            if (e[BacktrackElement::S] || e[BacktrackElement::S_REV] || e[BacktrackElement::D] ||
+            if (e[BacktrackElement::S] || e[BacktrackElement::S_REV] || 
                 (e[BacktrackElement::T_LEFT] && right_elem.below_placements[0] == x) ||
-                (e[BacktrackElement::T_RIGHT] && left_elem.below_placements[0] == x))
+                (e[BacktrackElement::T_RIGHT] && left_elem.below_placements[0] == x) ||
+                (e[BacktrackElement::D] && right_elem.below_placements[0] == x) ||
+                (e[BacktrackElement::D] && left_elem.below_placements[0] == x))
                 {
                     elem.below_placements.push_back(x);
                 }
