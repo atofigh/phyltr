@@ -1,5 +1,13 @@
 #! /usr/bin/env python
 
+# Copyright (C) 2010, 2011 Ali Tofigh
+#
+# This file is part of PhylTr, a package for phylogenetic analysis
+# using duplications and transfers.
+#
+# PhylTr is released under the terms of the license contained in the
+# file LICENSE.
+
 import sys, os, os.path, tempfile
 
 if len(sys.argv) != 3:

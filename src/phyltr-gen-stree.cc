@@ -1,4 +1,14 @@
 /*
+ * Copyright (C) 2010, 2011 Ali Tofigh
+ *
+ * This file is part of PhylTr, a package for phylogenetic analysis
+ * using duplications and transfers.
+ *
+ * PhylTr is released under the terms of the license contained in the
+ * file LICENSE.
+ */
+
+/*
  * This file contains source code for a program that generates binary
  * species trees from a birth-death process. Given the two paramters,
  * birth- and death-rate, the program creates a binary tree with times
