@@ -3,5 +3,5 @@
 AUTOMAKE_OPTIONS = check-news
 SUBDIRS = src
 ACLOCAL_AMFLAGS = -I config/m4
-EXTRA_DIST = NEWS scripts/ tests/
+EXTRA_DIST = NEWS scripts tests
 TESTS = tests/t1.sh
