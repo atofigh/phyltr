@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([phyltr], [0.9], [alix.tofigh@gmail.com])
+AC_INIT([phyltr], [1.0], [alix.tofigh@gmail.com])
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_MACRO_DIR([config/m4])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
