@@ -1,0 +1,16 @@
+This file contains reminders and procedures for preparing a
+release. This file should not be included in releases.
+
+1. build and test from scratch:
+   $ git clean -df
+   $ ./bootstrap
+   $ ./configure [options]
+   $ make -j8
+   $ [ do some tests here ]
+2. update version number in configure.ac
+3. update the EXTRA_DIST variable in Makefile.am
+4. update NEWS and README
+5. make sure all source files have the same license header
+6. update this RELEASE.howto
+7. create and test release package using "make distcheck"
+8. tag the release
