@@ -1277,8 +1277,10 @@ backtrack(vector<Scenario> &scenarios)
                 {
                     BOOST_FOREACH(Scenario &sc, matrix[0][0][x].scenarios_at)
                         {
-                            max_losses = min(max_losses,
-                                             count_losses(S, G, sigma, sc.transfer_edges));
+                            max_losses =
+                                min(max_losses, count_losses(S, G, sigma,
+                                                             sc.transfer_edges,
+                                                             g_input.use_species_tree_dates));
                         }
                 }
         }
@@ -1298,7 +1300,7 @@ backtrack(vector<Scenario> &scenarios)
             // Take only scenarios with minimal losses if the flag is set.
             BOOST_FOREACH(Scenario &sc, matrix[0][0][x].scenarios_at)
                 {
-                    if (count_losses(S, G, sigma, sc.transfer_edges) <= max_losses)
+                    if (count_losses(S, G, sigma, sc.transfer_edges, g_input.use_species_tree_dates) <= max_losses)
                         {
                             scenarios.push_back(sc);
                         }
@@ -1965,7 +1967,8 @@ operator<<(ostream &out, const Scenario &sc)
     out << "\nNumber of losses: " << count_losses(*g_input.species_tree,
                                                   *g_input.gene_tree,
                                                   g_input.sigma,
-                                                  sc.transfer_edges);
+                                                  sc.transfer_edges,
+                                                  g_input.use_species_tree_dates);
     out << "\n";
 
     return out;
@@ -1986,9 +1989,11 @@ operator<(const Scenario &sc1, const Scenario &sc2)
         }
 
     int losses1 = count_losses(*g_input.species_tree, *g_input.gene_tree,
-                               g_input.sigma, sc1.transfer_edges);
+                               g_input.sigma, sc1.transfer_edges,
+                               g_input.use_species_tree_dates);
     int losses2 = count_losses(*g_input.species_tree, *g_input.gene_tree,
-                               g_input.sigma, sc2.transfer_edges);
+                               g_input.sigma, sc2.transfer_edges,
+                               g_input.use_species_tree_dates);
     if (losses1 < losses2)
         {
             return true;
