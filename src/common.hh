@@ -84,7 +84,8 @@ void compute_lambda(const Binary_tree<T> &species_tree,
                     const Binary_tree<T> &gene_tree,
                     const std::vector<typename Binary_tree<T>::vid_t> &sigma,
                     const boost::dynamic_bitset<> &transfer_edges,
-                    std::vector<typename Binary_tree<T>::vid_t> &lambda);
+                    std::vector<typename Binary_tree<T>::vid_t> &lambda,
+                    bool dated_stree = false);
 
 
 /*
@@ -97,7 +98,8 @@ template<typename T>
 int count_losses(const Binary_tree<T> &species_tree,
                  const Binary_tree<T> &gene_tree,
                  const std::vector<typename Binary_tree<T>::vid_t> &sigma,
-                 const boost::dynamic_bitset<> &transfer_edges);
+                 const boost::dynamic_bitset<> &transfer_edges,
+                 bool dated_stree = false);
 
 /*
  * get_postorder_numbering()

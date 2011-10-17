@@ -173,7 +173,8 @@ void compute_lambda(const Binary_tree<T> &S,
                     const Binary_tree<T> &G,
                     const std::vector<typename Binary_tree<T>::vid_t> &sigma,
                     const boost::dynamic_bitset<> &transfer_edges,
-                    std::vector<typename Binary_tree<T>::vid_t> &lambda)
+                    std::vector<typename Binary_tree<T>::vid_t> &lambda,
+                    bool dated_stree = false)
 {
     typedef Binary_tree<T> Tree_type;
     typedef typename Tree_type::vid_t vid_t;
@@ -192,18 +193,56 @@ void compute_lambda(const Binary_tree<T> &S,
             
             vid_t v = G.left(u);
             vid_t w = G.right(u);
-            
-            if (transfer_edges[v])
-                {
-                    lambda[u] = lambda[w];
-                }
-            else if (transfer_edges[w])
-                {
-                    lambda[u] = lambda[v];
-                }
-            else
+
+            if (!transfer_edges[v] && !transfer_edges[w])
                 {
                     lambda[u] = S.lca(lambda[w], lambda[v]);
+                }
+            else if (dated_stree)
+                {
+                    if (transfer_edges[v])
+                        {
+                            if (S.time(lambda[w]) < S.time(lambda[v]))
+                                {
+                                    lambda[u] = lambda[w];
+                                }
+                            else
+                                {
+                                    vid_t x = lambda[w];
+                                    while (S.time(S.parent(x)) > S.time(lambda[v]))
+                                        {
+                                            x = S.parent(x);
+                                        }
+                                    lambda[u] = x;
+                                }
+                        }
+                    else // w is the transferred vertex
+                        {
+                            if (S.time(lambda[v]) < S.time(lambda[w]))
+                                {
+                                    lambda[u] = lambda[v];
+                                }
+                            else
+                                {
+                                    vid_t x = lambda[v];
+                                    while (S.time(S.parent(x)) > S.time(lambda[w]))
+                                        {
+                                            x = S.parent(x);
+                                        }
+                                    lambda[u] = x;
+                                }
+                        }
+                }
+            else // not using dated species tree and u is a transfer vertex
+                {
+                    if (transfer_edges[v])
+                        {
+                            lambda[u] = lambda[w];
+                        }
+                    else
+                        {
+                            lambda[u] = lambda[v];
+                        }
                 }
         }
 }
@@ -212,14 +251,15 @@ template<typename T>
 int count_losses(const Binary_tree<T> &S,
                  const Binary_tree<T> &G,
                  const std::vector<typename Binary_tree<T>::vid_t> &sigma,
-                 const boost::dynamic_bitset<> &transfer_edges)
+                 const boost::dynamic_bitset<> &transfer_edges,
+                 bool dated_stree = false)
 {
     typedef Binary_tree<T> Tree_type;
     typedef typename Binary_tree<T>::vid_t vid_t;
 
     // Compute lambda
     std::vector<vid_t> lambda;
-    compute_lambda(S, G, sigma, transfer_edges, lambda);
+    compute_lambda(S, G, sigma, transfer_edges, lambda, dated_stree);
 
     // For each non-transfer edge (u, v) in G, count the number of
     // speciations that we pass from lambda(u) to lambda(v).  A loss
@@ -229,21 +269,34 @@ int count_losses(const Binary_tree<T> &S,
     for (vid_t u = 1; u < G.size(); ++u)
         {
             vid_t p = G.parent(u);
-            if (transfer_edges[u] || lambda[p] == lambda[u])
+            if (lambda[p] == lambda[u])
                 continue;
 
-            vid_t x = S.parent(lambda[u]);
+            if (transfer_edges[u] && !dated_stree)
+                continue;
 
-            vid_t u_sibling = G.left(p) == u ? G.right(p) : G.left(p);
-            if (lambda[u_sibling] == lambda[p]) // we know that lampda(u) != lambda(p)!
+            if (transfer_edges[u] && dated_stree)
                 {
-                    losses += 1;
+                    vid_t x = S.parent(lambda[u]);
+                    while (S.time(x) > S.time(lambda[p]))
+                        {
+                            losses += 1;
+                            x = S.parent(x);
+                        }
+                    continue;
                 }
 
+            vid_t x = S.parent(lambda[u]);
             while (x != lambda[p])
                 {
                     losses += 1;
                     x = S.parent(x);
+                }
+
+            vid_t u_sibling = G.left(p) == u ? G.right(p) : G.left(p);
+            if (lambda[u_sibling] == lambda[p] || transfer_edges[u_sibling]) // we know that lampda(u) != lambda(p)!
+                {
+                    losses += 1;
                 }
         }
     
