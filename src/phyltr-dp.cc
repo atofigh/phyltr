@@ -298,12 +298,14 @@ struct ProgramInput {
     shared_ptr<tree_type>   gene_tree;
     vector<unsigned>        sigma;
     vector<unsigned>        gene_tree_numbering;
+    vector<unsigned>        species_tree_numbering;
     cost_type               duplication_cost;
     cost_type               transfer_cost;
     bool                    print_only_cost;
     bool                    use_species_tree_dates;
     bool                    print_only_minimal_transfer_scenarios;
     bool                    print_only_minimal_loss_scenarios;
+    bool                    show_stree_edges;
     bool                    unsorted;
 }                                       g_input;
 
@@ -549,9 +551,9 @@ main(int argc, char *argv[])
             exit(EXIT_FAILURE);
         }
 
-    // We will use postorder to number the vertices of the gene tree for output.
+    // We will use postorder to number the vertices of the trees for output.
     get_postorder_numbering(*g_input.gene_tree, g_input.gene_tree_numbering);
-
+    get_postorder_numbering(*g_input.species_tree, g_input.species_tree_numbering);
 
     // Run the main algorithm of this program.
     if (g_input.use_species_tree_dates)
@@ -651,6 +653,11 @@ parse_options(int argc, char*argv[])
          "In other words, transfers are minimized first. "
          "This is currently not implemented in combination with the "
          "--use-species-tree-dates flag.")
+        ("show-stree-edges",
+         po::bool_switch(&g_input.show_stree_edges)->default_value(false),
+         "If set, the output will also print the pair of species tree edges "
+         "involved for each transfer. Note that this is based on mapping the "
+         "gene tree vertices as close to the leaves as possible.")
         ("unsorted",
          po::bool_switch(&g_input.unsorted)->default_value(false),
          "If set, the scenarios will not be sorted") ;
@@ -1954,18 +1961,22 @@ combine_scenarios_dated(const vector<Scenario> &vec1,
 ostream &
 operator<<(ostream &out, const Scenario &sc)
 {
-    vector<unsigned> transfer_edges;
-    for (vid_t u = 0; u < g_input.gene_tree->size(); ++u)
+    const tree_type &G = *g_input.gene_tree;
+    const tree_type &S = *g_input.species_tree;
+
+    typedef pair<unsigned, vid_t> u_vidt_pair;
+    vector<u_vidt_pair> transfer_edges;
+    for (vid_t u = 0; u < G.size(); ++u)
         {
             if (sc.transfer_edges[u])
                 {
-                    transfer_edges.push_back(g_input.gene_tree_numbering[u]);
+                    transfer_edges.push_back(make_pair(g_input.gene_tree_numbering[u], u));
                 }
         }
     sort(transfer_edges.begin(), transfer_edges.end());
 
     vector<unsigned> duplications;
-    for (vid_t u = 0; u < g_input.gene_tree->size(); ++u)
+    for (vid_t u = 0; u < G.size(); ++u)
         {
             if (sc.duplications[u])
                 {
@@ -1975,17 +1986,41 @@ operator<<(ostream &out, const Scenario &sc)
     sort(duplications.begin(), duplications.end());
 
     out << "Transfer edges:\t";
-    copy(transfer_edges.begin(), transfer_edges.end(),
-         ostream_iterator<unsigned>(out, " "));
+    BOOST_FOREACH(const u_vidt_pair &p, transfer_edges)
+        {
+            out << p.first << " ";
+        }
     out << "\nDuplications:\t";
     copy(duplications.begin(), duplications.end(),
          ostream_iterator<unsigned>(out, " "));
-    out << "\nNumber of losses: " << count_losses(*g_input.species_tree,
-                                                  *g_input.gene_tree,
-                                                  g_input.sigma,
+    out << "\nNumber of losses: " << count_losses(S, G, g_input.sigma,
                                                   sc.transfer_edges,
                                                   g_input.use_species_tree_dates);
     out << "\n";
+
+    if (g_input.show_stree_edges)
+        {
+            vector<vid_t> lambda;
+            compute_lambda(S, G, g_input.sigma, sc.transfer_edges, lambda,
+                           g_input.use_species_tree_dates);
+
+            out << "Species tree transfer edge pairs: ";
+            BOOST_FOREACH(const u_vidt_pair &p, transfer_edges)
+                {
+                    vid_t from = lambda[G.parent(p.second)];
+                    vid_t to = lambda[p.second];
+                    while(S.time(S.parent(to)) > S.time(from))
+                        {
+                            to = S.parent(to);
+                        }
+
+                    out << g_input.species_tree_numbering[from]
+                        << " "
+                        << g_input.species_tree_numbering[to]
+                        << " ";
+                }
+            out << "\n";
+        }
 
     return out;
 }
