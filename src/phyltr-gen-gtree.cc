@@ -274,7 +274,7 @@ main(int argc, char *argv[])
             po::store(parser.run(), g_options);
             po::notify(g_options);
         }
-    catch (exception &e)
+    catch (const exception &e)
         {
             cerr << PROG_NAME << ": " << e.what() << '\n'
                  << "Try '" << PROG_NAME << " --help' for more information.\n";

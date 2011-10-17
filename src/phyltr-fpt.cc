@@ -272,7 +272,7 @@ main(int argc, char *argv[])
                     exit(EXIT_SUCCESS);
                 }
         }
-    catch (po::error &e)
+    catch (const po::error &e)
         {
             print_error(e.what());
             cerr << "Try '" << PROGRAM_NAME << " "
@@ -524,7 +524,15 @@ read_species_tree()
 
     // Create the species tree from its NH-equivalent
     g_input.species_tree.reset(new tree_type());
-    create_binary_tree(root, *g_input.species_tree, 0);
+    try
+        {
+            create_binary_tree(root, *g_input.species_tree, 0);
+        }
+    catch (const std::exception &e)
+        {
+            print_error(e.what());
+            return false;
+        }
 
     return true;
 }
@@ -561,7 +569,15 @@ read_gene_tree()
 
     // Create the species tree from its NH-equivalent
     g_input.gene_tree.reset(new tree_type());
-    create_binary_tree(root, *g_input.gene_tree, 0);
+    try
+        {
+            create_binary_tree(root, *g_input.gene_tree, 0);
+        }
+    catch (const std::exception &e)
+        {
+            print_error(e.what());
+            return false;
+        }
 
     return true;
 }
@@ -579,7 +595,7 @@ read_sigma()
                                     g_input.sigma_fname,
                                     g_input.sigma);
         }
-    catch (logic_error &e)
+    catch (const logic_error &e)
         {
             print_error(e.what());
             return false;
