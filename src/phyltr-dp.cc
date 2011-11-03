@@ -1376,7 +1376,8 @@ backtrack_dated(vector<Scenario> &scenarios)
                         }
                 }
         }
-    scenarios = g_backtrack_matrix_dated[n_levels - 1][0][0].scenarios_at;
+    vector<Scenario>().swap(scenarios);
+    scenarios.swap(g_backtrack_matrix_dated[n_levels - 1][0][0].scenarios_at);
 }
 
 
