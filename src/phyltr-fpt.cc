@@ -65,7 +65,7 @@ const string USAGE =
 //
 // Throughout the program, an edge is represented by the vertex at its
 // head, i.e., the vertex farthest away from the root.
-// 
+//
 // The operator< is used to sort the scenarios for printing. It sorts
 // first on cost, then the number of transfers, then on the number of
 // losses, and lastly according to lexicographic order.
@@ -153,6 +153,42 @@ private:
 };
 ostream &operator<<(ostream &, const Candidate &);
 
+class CandidateDated {
+public:
+    class bad_transfer_exception : public exception {};
+    class bad_duplication_exception : public exception {};
+
+    CandidateDated();
+
+    void    set_transfer_edge(vid_t);
+    void    set_duplication(vid_t);
+    bool    is_transfer_edge(vid_t) const;
+    bool    is_duplication(vid_t)   const;
+    double  cost()                  const;
+    bool    is_elegant()            const;
+    vid_t   get_s_move()            const;
+    vid_t   lambda(vid_t)           const;
+    vid_t   parent(vid_t)           const;
+    vid_t   left(vid_t)             const;
+    vid_t   right(vid_t)            const;
+
+private:
+    dynamic_bitset<>        duplications_;
+    dynamic_bitset<>        transfer_edges_;
+    double                  cost_;
+    vector<vid_t>           lambda_;
+    mutable vector<vid_t>   s_moves_;
+    vector<vid_t>           P_;
+    vector<vid_t>           left_;
+    vector<vid_t>           right_;
+
+    bool is_s_move_(vid_t) const;
+    void compute_highest_mapping_(vector<vid_t> &) const;
+
+    friend ostream &operator<<(ostream &, const CandidateDated &);
+};
+ostream &operator<<(ostream &, const CandidateDated &);
+
 
 
 //*****************************************************************************
@@ -183,6 +219,7 @@ struct ProgramInput {
     vector<unsigned>        gene_tree_numbering;
     double                  duplication_cost;
     double                  transfer_cost;
+    bool                    use_species_tree_dates;
     bool                    unsorted;
 } g_input;
 
@@ -219,7 +256,7 @@ bool check_options();
 //
 // Should be called to check the data in g_input once everything has
 // been read. Performs (consistency) checks that are not performed
-// when getting/reading the individual data members of g_input. 
+// when getting/reading the individual data members of g_input.
 //*****************************************************************************
 bool check_input();
 
@@ -256,6 +293,7 @@ bool read_sigma();
 // passed to the function is filled with Scenario options.
 // //*****************************************************************************
 void fpt_algorithm(vector<Scenario> &);
+void fpt_algorithm_dated(vector<Scenario> &);
 
 
 int
@@ -279,8 +317,8 @@ main(int argc, char *argv[])
                  << "--help' for more information.\n";
             exit(EXIT_FAILURE);
         }
-    
-    
+
+
 
     // Read the input and check that everything is ok.
     bool input_ok =
@@ -300,11 +338,18 @@ main(int argc, char *argv[])
     // We will use postorder to number the vertices of the gene tree for output.
     get_postorder_numbering(*g_input.gene_tree, g_input.gene_tree_numbering);
 
-    
+
 
     // Run the algorithm and get all final, elegant, candidates
     vector<Scenario> scenarios;
-    fpt_algorithm(scenarios);
+    if (g_input.use_species_tree_dates)
+        {
+            fpt_algorithm_dated(scenarios);
+        }
+    else
+        {
+            fpt_algorithm(scenarios);
+        }
 
     // Sort and print the scenarios
     if (!g_input.unsorted)
@@ -327,7 +372,7 @@ void
 fpt_algorithm(vector<Scenario> &scenarios)
 {
     typedef shared_ptr<Candidate> cand_ptr;
-    
+
     scenarios.clear();
 
     // We will do a depth first search, so we need a stack.
@@ -371,7 +416,88 @@ fpt_algorithm(vector<Scenario> &scenarios)
 
                             cp2->set_transfer_edge(g_input.gene_tree->left(s_move));
                             cp3->set_transfer_edge(g_input.gene_tree->right(s_move));
-                            
+
+                            if (cp2->cost() <= g_input.max_cost)
+                                {
+                                    cand_stack.push(cp2);
+                                }
+                            if (cp3->cost() <= g_input.max_cost)
+                                {
+                                    cand_stack.push(cp3);
+                                }
+                        }
+                }
+            else
+                {
+                    // Insert elegant final candidates with cost in
+                    // the given range into the return-vector.
+                    if (cp->cost() >= g_input.min_cost &&
+                        cp->cost() <= g_input.max_cost &&
+                        cp->is_elegant())
+                        {
+                            Scenario sc(gene_tree_size);
+                            for (vid_t u = 0; u < gene_tree_size; ++u)
+                                {
+                                    sc.duplications[u] = cp->is_duplication(u);
+                                    sc.transfer_edges[u] = cp->is_transfer_edge(u);
+                                }
+                            scenarios.push_back(sc);
+                        }
+                }
+        }
+}
+
+
+
+void
+fpt_algorithm_dated(vector<Scenario> &scenarios)
+{
+    typedef shared_ptr<Candidate> cand_ptr;
+
+    scenarios.clear();
+
+    // We will do a depth first search, so we need a stack.
+    stack<cand_ptr> cand_stack;
+
+    // Push the initial candidate onto the stack. Note that the
+    // initial candidate may have some duplications set already!
+    cand_ptr initial_candidate(new Candidate());
+    if (initial_candidate->cost() <= g_input.max_cost)
+        {
+            cand_stack.push(initial_candidate);
+        }
+
+    // Do the depth-first search.
+    unsigned gene_tree_size = g_input.gene_tree->size();
+    while (!cand_stack.empty())
+        {
+            cand_ptr cp = cand_stack.top(); cand_stack.pop();
+
+
+            vid_t s_move = cp->get_s_move();
+            double cp_cost = cp->cost();
+
+            if (s_move != tree_type::NONE)
+                {
+                    // Resvole the s-move in three ways.
+                    if (cp_cost + g_input.duplication_cost <= g_input.max_cost)
+                        {
+                            cand_ptr cp1(new Candidate(*cp));
+                            cp1->set_duplication(cp->parent(s_move));
+                            if (cp1->cost() <= g_input.max_cost)
+                                {
+                                    cand_stack.push(cp1);
+                                }
+                        }
+
+                    if (cp_cost + g_input.transfer_cost <= g_input.max_cost)
+                        {
+                            cand_ptr cp2(new Candidate(*cp));
+                            cand_ptr cp3(new Candidate(*cp));
+
+                            cp2->set_transfer_edge(g_input.gene_tree->left(s_move));
+                            cp3->set_transfer_edge(g_input.gene_tree->right(s_move));
+
                             if (cp2->cost() <= g_input.max_cost)
                                 {
                                     cand_stack.push(cp2);
@@ -429,6 +555,9 @@ parse_options(int argc, char*argv[])
         ("duplication-cost,d",
          po::value<double>(&g_input.duplication_cost)->default_value(1.0),
          "Cost of duplication events")
+        ("use-species-tree-dates",
+         po::bool_switch(&g_input.use_species_tree_dates)->default_value(false),
+         "If set, the species tree dates are taken into account")
         ("unsorted",
          po::bool_switch(&g_input.unsorted)->default_value(false),
          "If set, the scenarios will not be sorted") ;
@@ -489,6 +618,39 @@ check_options()
 bool
 check_input()
 {
+    // If species tree dates are to be used, check that no two
+    // speciations have exactly the same time and that the time of
+    // leaves are after all speciations
+    const tree_type &S = *g_input.species_tree;
+
+    vector<tree_type::real_type> times;
+    if (g_input.use_species_tree_dates)
+        {
+            for (vid_t x = 0; x < S.size(); ++x)
+                {
+                    if (!S.is_leaf(x))
+                        {
+                            times.push_back(S.time(x));
+                        }
+                }
+            sort(times.begin(), times.end());
+            if (unique(times.begin(), times.end()) != times.end())
+                {
+                    print_error("different speciations cannot occur at the same time");
+                    return(false);
+                }
+
+            tree_type::real_type max_time = *max_element(times.begin(), times.end());
+            for (vid_t x = 0; x < S.size(); ++x)
+            {
+                if (S.is_leaf(x) && S.time(x) <= max_time)
+                {
+                    print_error("leaf time is less than speciation time");
+                    return(false);
+                }
+            }
+        }
+
     return true;
 }
 
@@ -745,7 +907,7 @@ Candidate::Candidate() :
 {
     const tree_type &G = *g_input.gene_tree;
     const tree_type &S = *g_input.species_tree;
-    
+
     compute_lambda(S, G, g_input.sigma, transfer_edges_, lambda_);
 
     for (vid_t u = 0; u < G.size(); ++u)
@@ -754,7 +916,7 @@ Candidate::Candidate() :
             left_[u] = G.left(u);
             right_[u] = G.right(u);
         }
-    
+
     // Find forced duplications, i.e., internal gene tree vertices
     // that are mapped to leaves of S.
     for (vid_t u = 0; u < G.size(); ++u)
@@ -945,7 +1107,7 @@ Candidate::is_elegant() const
     vector<vid_t> highest(G.size());
 
     compute_highest_mapping_(highest);
-    
+
     // Check that the children of duplications are mapped by lambda to
     // comparable species tree vertices. Otherwise, the duplication is
     // unnecessary.
@@ -956,7 +1118,7 @@ Candidate::is_elegant() const
             vid_t d = dd;
             vid_t v = G.left(d);
             vid_t w = G.right(d);
-            if (!S.descendant(lambda_[v], lambda_[w]) && 
+            if (!S.descendant(lambda_[v], lambda_[w]) &&
                 !S.descendant(lambda_[w], lambda_[v]))
                 return false;
         }
@@ -974,7 +1136,7 @@ Candidate::is_elegant() const
             vid_t u = G.parent(v);
             vid_t pu = G.parent(u);
             vid_t x = S.lca(lambda_[u], lambda_[v]);
-            
+
             // The root of G is always an unnecessary transfer vertex.
             if (u == 0)
                 return false;
@@ -985,12 +1147,12 @@ Candidate::is_elegant() const
             if (!is_duplication(pu) &&
                 !is_transfer_edge(G.left(pu)) &&
                 !is_transfer_edge(G.right(pu)) &&
-                S.descendant(x, lambda_[pu]) && 
+                S.descendant(x, lambda_[pu]) &&
                 x != lambda_[pu])
                 {
                     return false;
                 }
-            
+
             // If p(u) is not a speciation, then it is enough for x to
             // be a descendant of highest[p(u)] for the transfer to be
             // unnecessary.
@@ -1016,7 +1178,7 @@ Candidate::get_s_move() const
         {
             s_moves_.pop_back();
         }
-    
+
     return s_moves_.empty() ? tree_type::NONE : s_moves_.back();
 }
 
@@ -1060,7 +1222,7 @@ Candidate::is_s_move_(vid_t u) const
         !g_input.gene_tree->is_leaf(u) &&
         !is_duplication(u) &&
         P_[u] != tree_type::NONE &&
-        lambda_[g_input.gene_tree->left(u)] != lambda_[u] && 
+        lambda_[g_input.gene_tree->left(u)] != lambda_[u] &&
         lambda_[g_input.gene_tree->right(u)] != lambda_[u] &&
         lambda_[P_[u]] == lambda_[u] &&
         !is_duplication(P_[u]);
@@ -1068,7 +1230,7 @@ Candidate::is_s_move_(vid_t u) const
 
 
 
-void 
+void
 Candidate::compute_highest_mapping_(vector<vid_t> &highest) const
 {
     const tree_type &G = *g_input.gene_tree;
@@ -1099,13 +1261,13 @@ Candidate::compute_highest_mapping_(vector<vid_t> &highest) const
         {
             highest[0] = 0;
         }
-    else // If the root is a transfer vertex. 
+    else // If the root is a transfer vertex.
         {
             // Let v be the transfered child of the root.
             vid_t v = is_transfer_edge(G.left(0)) ? G.left(0) : G.right(0);
             highest[0] = C(S.lca(lambda_[0], lambda_[v]), lambda_[0]);
         }
-        
+
     // Next, take care of the rest of the vertices from the root and down.
     for (vid_t u = G.preorder_next(0);
          u != G.NONE;
@@ -1159,7 +1321,7 @@ Candidate::compute_highest_mapping_(vector<vid_t> &highest) const
                         {
                             // Let v be the transferred child of u.
                             vid_t v = is_transfer_edge(G.left(u)) ? G.left(u) : G.right(u);
-                            
+
                             z_prime = C(S.lca(y, lambda_[v]), y);
                         }
                     // Since z and z_prime are both ancestors of
@@ -1172,8 +1334,470 @@ Candidate::compute_highest_mapping_(vector<vid_t> &highest) const
 }
 
 
+
 ostream &
 operator<<(ostream &out, const Candidate &c)
+{
+    out << "duplications:\t" << c.duplications_ << "\n";
+    out << "transfers:\t" << c.transfer_edges_ << "\n";
+    out << "potential smoves:\t";
+    copy(c.s_moves_.begin(), c.s_moves_.end(),
+         ostream_iterator<vid_t>(out, " "));
+    out << "\n";
+    out << "real smoves:\t\t";
+    for (vid_t u = 0; u < g_input.gene_tree->size(); ++u)
+        {
+            if (c.is_s_move_(u))
+                out << u << " ";
+        }
+    out << "\n";
+
+    return out;
+}
+
+
+
+CandidateDated::CandidateDated() :
+    duplications_(g_input.gene_tree->size()),
+    transfer_edges_(g_input.gene_tree->size()),
+    cost_(0.0),
+    lambda_(g_input.gene_tree->size()),
+    P_(g_input.gene_tree->size()),
+    left_(g_input.gene_tree->size()),
+    right_(g_input.gene_tree->size())
+{
+    const tree_type &G = *g_input.gene_tree;
+    const tree_type &S = *g_input.species_tree;
+
+    compute_lambda(S, G, g_input.sigma, transfer_edges_, lambda_);
+
+    for (vid_t u = 0; u < G.size(); ++u)
+        {
+            P_[u] = G.parent(u);
+            left_[u] = G.left(u);
+            right_[u] = G.right(u);
+        }
+
+    // Find forced duplications, i.e., internal gene tree vertices
+    // that are mapped to leaves of S.
+    for (vid_t u = 0; u < G.size(); ++u)
+        {
+            if (!G.is_leaf(u) && S.is_leaf(lambda_[u]))
+                {
+                    duplications_.set(u);
+                    cost_ += g_input.duplication_cost;
+                }
+        }
+
+    // Find all s-moves.
+    for (vid_t u = 0; u < G.size(); ++u)
+        {
+            if (is_s_move_(u))
+                {
+                    s_moves_.push_back(u);
+                }
+        }
+}
+
+
+
+void
+CandidateDated::set_transfer_edge(vid_t u)
+{
+    const tree_type &G = *g_input.gene_tree;
+    const tree_type &S = *g_input.species_tree;
+
+    if (u == 0)
+        {
+            throw bad_transfer_exception();
+        }
+
+    vid_t parent_u = G.parent(u);
+    vid_t sibling_u = G.left(parent_u) == u ? G.right(parent_u) : G.left(parent_u);
+
+    // parent_u must be an anchor
+    if (lambda_[parent_u] == lambda_[u] ||
+        lambda_[parent_u] == lambda_[sibling_u])
+        {
+            throw bad_transfer_exception();
+        }
+
+    // Set the transfer and update the cost.
+    transfer_edges_.set(u);
+    cost_ += g_input.transfer_cost;
+
+    // update P_, left_, and right_
+    vid_t v = u == G.left(parent_u) ? left_[parent_u] : right_[parent_u];
+    vid_t w = u == G.left(parent_u) ? right_[parent_u] : left_[parent_u];
+    for (vid_t a = v; a != parent_u; a = G.parent(a))
+        {
+            P_[a] = tree_type::NONE;
+        }
+    for (vid_t a = w; a != parent_u; a = G.parent(a))
+        {
+            P_[a] = P_[parent_u];
+        }
+    if (P_[parent_u] != tree_type::NONE)
+        {
+            if (left_[P_[parent_u]] == parent_u)
+                {
+                    left_[P_[parent_u]] = w;
+                }
+            else
+                {
+                    right_[P_[parent_u]] = w;
+                }
+        }
+    left_[parent_u] = tree_type::NONE;
+    right_[parent_u] = tree_type::NONE;
+
+
+    // update lambda and s_moves, and find the vertices with
+    // new positions that are forced duplications.
+    lambda_[parent_u] = lambda_[sibling_u];
+    vid_t last_updated_vertex = parent_u;
+    for (vid_t a = G.parent(parent_u); a != tree_type::NONE; a = G.parent(a))
+        {
+            // Compute the new placement of a
+            vid_t old_lambda = lambda_[a];
+            vid_t new_lambda = S.lca(lambda_[G.left(a)], lambda_[G.right(a)]);
+            if (is_transfer_edge(G.left(a)))
+                {
+                    new_lambda = lambda_[G.right(a)];
+                }
+            else if (is_transfer_edge(G.right(a)))
+                {
+                    new_lambda = lambda_[G.left(a)];
+                }
+            lambda_[a] = new_lambda;
+
+            if (old_lambda == new_lambda)
+                break;
+
+            last_updated_vertex = a;
+
+            // If a is not a transfer vertex and not a duplication
+            if (left_[a] != tree_type::NONE && !duplications_[a])
+                {
+                    // Is 'a' a forced duplication?
+                    if (S.is_leaf(new_lambda) ||
+                        (lambda_[left_[a]] == new_lambda &&
+                         duplications_[left_[a]]) ||
+                        (lambda_[right_[a]] == new_lambda &&
+                         duplications_[right_[a]]))
+                        {
+                            duplications_.set(a);
+                            cost_ += g_input.duplication_cost;
+                        }
+                    // Otherwise its children are potential s-moves
+                    else
+                        {
+                            s_moves_.push_back(left_[a]);
+                            s_moves_.push_back(right_[a]);
+                        }
+                }
+        }
+
+    if (P_[last_updated_vertex] != tree_type::NONE)
+        {
+            s_moves_.push_back(P_[last_updated_vertex]);
+        }
+}
+
+
+
+void
+CandidateDated::set_duplication(vid_t u)
+{
+    // u must not be a duplication or transfer vertex
+    if (is_duplication(u) || left_[u] == tree_type::NONE)
+        {
+            throw bad_duplication_exception();
+        }
+
+    duplications_.set(u);
+    cost_ += g_input.duplication_cost;
+
+    // Find any forced duplications as a result of u becoming a duplication.
+    for (vid_t v = P_[u]; v != tree_type::NONE; v = P_[v])
+        {
+            if (!duplications_[v] && lambda_[v] == lambda_[u])
+                {
+                    duplications_.set(v);
+                    cost_ += g_input.duplication_cost;
+                }
+            else
+                {
+                    break;
+                }
+        }
+}
+
+
+
+bool
+CandidateDated::is_transfer_edge(vid_t u) const
+{
+    return transfer_edges_.test(u);
+}
+
+
+
+bool
+CandidateDated::is_duplication(vid_t u) const
+{
+    return duplications_.test(u);
+}
+
+
+
+double
+CandidateDated::cost() const
+{
+    return cost_;
+}
+
+
+
+bool
+CandidateDated::is_elegant() const
+{
+    const tree_type &G = *g_input.gene_tree;
+    const tree_type &S = *g_input.species_tree;
+
+    vector<vid_t> highest(G.size());
+
+    compute_highest_mapping_(highest);
+
+    // Check that the children of duplications are mapped by lambda to
+    // comparable species tree vertices. Otherwise, the duplication is
+    // unnecessary.
+    for (dynamic_bitset<>::size_type dd = duplications_.find_first();
+         dd != duplications_.npos;
+         dd = duplications_.find_next(dd))
+        {
+            vid_t d = dd;
+            vid_t v = G.left(d);
+            vid_t w = G.right(d);
+            if (!S.descendant(lambda_[v], lambda_[w]) &&
+                !S.descendant(lambda_[w], lambda_[v]))
+                return false;
+        }
+
+    // Check if the parents of transfer vertices can be mapped high
+    // enough so that the transfer can be converted to a
+    // speciation. If so, the transfer is unnecessary.
+    for (dynamic_bitset<>::size_type vv = transfer_edges_.find_first();
+         vv != transfer_edges_.npos;
+         vv = transfer_edges_.find_next(vv))
+        {
+            vid_t v = vv;
+            // Let (u, v) be the transfer edge we are considering, let
+            // pu = p(u), and x = lca{lambda_[u], lambda_[v]}
+            vid_t u = G.parent(v);
+            vid_t pu = G.parent(u);
+            vid_t x = S.lca(lambda_[u], lambda_[v]);
+
+            // The root of G is always an unnecessary transfer vertex.
+            if (u == 0)
+                return false;
+
+            // If p(u) is a speciation and x is a proper descendant of
+            // highest[p(u)] = lambda_[p(u)], then the transfer is
+            // unnecessary.
+            if (!is_duplication(pu) &&
+                !is_transfer_edge(G.left(pu)) &&
+                !is_transfer_edge(G.right(pu)) &&
+                S.descendant(x, lambda_[pu]) &&
+                x != lambda_[pu])
+                {
+                    return false;
+                }
+
+            // If p(u) is not a speciation, then it is enough for x to
+            // be a descendant of highest[p(u)] for the transfer to be
+            // unnecessary.
+            if ((is_duplication(pu) ||
+                 is_transfer_edge(G.left(pu)) ||
+                 is_transfer_edge(G.right(pu))) &&
+                S.descendant(x, highest[pu]))
+                {
+                    return false;
+                }
+        }
+
+    return true;
+}
+
+
+
+vid_t
+CandidateDated::get_s_move() const
+{
+    // Check vertices in s_move and find one that really is an s-move.
+    while (!s_moves_.empty() && !is_s_move_(s_moves_.back()))
+        {
+            s_moves_.pop_back();
+        }
+
+    return s_moves_.empty() ? tree_type::NONE : s_moves_.back();
+}
+
+
+vid_t
+CandidateDated::lambda(vid_t u) const
+{
+    return lambda_[u];
+}
+
+
+
+vid_t
+CandidateDated::parent(vid_t u) const
+{
+    return P_[u];
+}
+
+
+
+vid_t
+CandidateDated::left(vid_t u) const
+{
+    return left_[u];
+}
+
+
+
+vid_t
+CandidateDated::right(vid_t u) const
+{
+    return right_[u];
+}
+
+
+
+bool
+CandidateDated::is_s_move_(vid_t u) const
+{
+    return
+        !g_input.gene_tree->is_leaf(u) &&
+        !is_duplication(u) &&
+        P_[u] != tree_type::NONE &&
+        lambda_[g_input.gene_tree->left(u)] != lambda_[u] &&
+        lambda_[g_input.gene_tree->right(u)] != lambda_[u] &&
+        lambda_[P_[u]] == lambda_[u] &&
+        !is_duplication(P_[u]);
+}
+
+
+
+void
+CandidateDated::compute_highest_mapping_(vector<vid_t> &highest) const
+{
+    const tree_type &G = *g_input.gene_tree;
+    const tree_type &S = *g_input.species_tree;
+    const vector<vid_t> &sigma = g_input.sigma;
+
+    highest.resize(G.size());
+
+    // We define a function C(x, y) : V(S) x V(S) -> V(S). y must be a
+    // proper descendant of x in the species tree. The function
+    // returns the unique child of x that is an ancestor of y.
+    struct {
+        vid_t operator()(vid_t x, vid_t y) {
+            vid_t left = g_input.species_tree->left(x);
+            vid_t right = g_input.species_tree->right(x);
+            return  g_input.species_tree->descendant(y, left) ? left : right;
+        }
+    } C;
+
+    // First, take care of the root of G.
+    if (!is_duplication(0) &&
+        !is_transfer_edge(G.left(0)) &&
+        !is_transfer_edge(G.right(0))) // if root is a speciation
+        {
+            highest[0] = lambda_[0];
+        }
+    else if (is_duplication(0))
+        {
+            highest[0] = 0;
+        }
+    else // If the root is a transfer vertex.
+        {
+            // Let v be the transfered child of the root.
+            vid_t v = is_transfer_edge(G.left(0)) ? G.left(0) : G.right(0);
+            highest[0] = C(S.lca(lambda_[0], lambda_[v]), lambda_[0]);
+        }
+
+    // Next, take care of the rest of the vertices from the root and down.
+    for (vid_t u = G.preorder_next(0);
+         u != G.NONE;
+         u = G.preorder_next(u))
+        {
+            if (u == 0)
+                continue;
+
+            vid_t pu = G.parent(u);
+            vid_t x = lambda_[pu];
+            vid_t y = lambda_[u];
+
+            if (G.is_leaf(u))
+                {
+                    highest[u] = sigma[u];
+                }
+            else if (!is_duplication(u) &&
+                     !is_transfer_edge(G.left(u)) &&
+                     !is_transfer_edge(G.right(u)))
+                {
+                    highest[u] = lambda_[u];
+                }
+            else // If u is a duplication or a transfer vertex.
+                {
+                    // Let z be the highest possible mapping of u when
+                    // considering only p(u). If p(u) is a duplication
+                    // or if p(u) is a transfer but u is not the
+                    // transfered vertex, z = highest[pu]. Otherwise,
+                    // if p(u) is a speciation, z = C(x, y), and if
+                    // u is the transfered vertex, then z = C(lca(x, y), y)
+                    vid_t z = highest[pu];
+                    if (!is_duplication(pu) &&
+                        !is_transfer_edge(G.left(pu)) &&
+                        !is_transfer_edge(G.right(pu))) // If pu is speciation.
+                        {
+                            z = C(x, y);
+                        }
+                    else if (is_transfer_edge(u))
+                        {
+                            z = C(S.lca(x, y), y);
+                        }
+
+                    // Let z_prime be the highest possible mapping of
+                    // u when considering its children only. z_prime
+                    // is the root of x unless u is a transfer. In
+                    // that case, if v is the transferred child,
+                    // z_prime = C(lca(lambda_[u], lambda_[v]), lambda_[u]).
+                    vid_t z_prime = 0;
+                    if (is_transfer_edge(G.left(u)) ||
+                        is_transfer_edge(G.right(u)))
+                        {
+                            // Let v be the transferred child of u.
+                            vid_t v = is_transfer_edge(G.left(u)) ? G.left(u) : G.right(u);
+
+                            z_prime = C(S.lca(y, lambda_[v]), y);
+                        }
+                    // Since z and z_prime are both ancestors of
+                    // lambda_[u], we know that they are
+                    // comparable. The one that is minimal in S is
+                    // then the highest possible mapping of u.
+                    highest[u] = S.descendant(z, z_prime) ? z : z_prime;
+                }
+        }
+}
+
+
+
+ostream &
+operator<<(ostream &out, const CandidateDated &c)
 {
     out << "duplications:\t" << c.duplications_ << "\n";
     out << "transfers:\t" << c.transfer_edges_ << "\n";
