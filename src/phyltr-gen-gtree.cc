@@ -78,6 +78,24 @@ struct Node {
 
 unsigned Node::next_id = 0;
 
+/*
+ * class Stats
+ *
+ * Simple data struct to keep track of some statistics during the gene
+ * tree evolution process.
+ */
+struct Stats {
+    int duplications;
+    int transfers;
+    int losses;
+    int speciations;
+    double total_time;
+
+    Stats()
+        : transfers(0), duplications(0), losses(0), speciations(0), total_time(0.0)
+    {}
+};
+
 //============================================================================
 //                   Global Constants and variables.
 //============================================================================
@@ -134,7 +152,8 @@ unsigned seed = 0;
  */
 void advance_process(double                 time,
                      const vector<vid_t>   &slice, 
-                     vector<Node_ptr>      &cur_genes);
+                     vector<Node_ptr>      &cur_genes,
+                     Stats                 &stats);
 
 /*
  * speciate()
@@ -145,7 +164,8 @@ void advance_process(double                 time,
 void speciate(const Tree_type      &stree,
               vector<vid_t>        &slice,
               unsigned              slice_idx,
-              vector<Node_ptr>     &cur_genes);
+              vector<Node_ptr>     &cur_genes,
+              Stats &stats);
 
 /*
  * acceptable_gene_tree()
@@ -169,6 +189,7 @@ void print_gtree(ostream &out, const Tree_type &stree);
 void print_sigma(ostream &out, const Tree_type &stree);
 void print_gamma(ostream &out, const Tree_type &stree);
 void print_events(ostream &out, const Tree_type &stree);
+void print_stats(ostream &out, const Stats &stats);
 //=============================================================================
 //         Template and inline function and member definitions.
 //=============================================================================
@@ -446,8 +467,12 @@ main(int argc, char *argv[])
 
     unsigned attempts = max_attempts;
     bool gene_tree_accepted = false;
+    Stats stats;
+
     while (attempts--)
         {
+            stats = Stats();
+
             /* Create a vector with slice times in decreasing order so that we
                can pop the times from the back efficiently). */
             vector<double> times;
@@ -476,13 +501,13 @@ main(int argc, char *argv[])
                 root_time = g_options["root-length"].as<double>();
 
             /* Run the process before the first speciation. */
-            advance_process(root_time, slice, cur_genes);
+            advance_process(root_time, slice, cur_genes, stats);
     
             /* The first speciation occurs. Replace the stree root edge with
                its children, and duplicate the genes. */
             if (!stree.is_leaf(0))
                 {
-                    speciate(stree, slice, 0, cur_genes);
+                    speciate(stree, slice, 0, cur_genes, stats);
                 }
             /* Keep advancing and taking care of speciations until the end. */
             /* Note that leaves of stree might not end at the same time. */
@@ -490,7 +515,7 @@ main(int argc, char *argv[])
             while (times.empty() == false)
                 {
                     /* Advance the process until next speciation/leaf. */
-                    advance_process(times.back() - cur_time, slice, cur_genes);
+                    advance_process(times.back() - cur_time, slice, cur_genes, stats);
                     cur_time = times.back();
                     times.pop_back();
 
@@ -518,7 +543,7 @@ main(int argc, char *argv[])
                         }
                     else
                         {
-                            speciate(stree, slice, idx, cur_genes);
+                            speciate(stree, slice, idx, cur_genes, stats);
                         }
                 }
             if (acceptable_gene_tree(n_leaves, stree))
@@ -549,6 +574,7 @@ main(int argc, char *argv[])
     filenames.push_back(file_prefix + ".sigma");
     filenames.push_back(file_prefix + ".gamma");
     filenames.push_back(file_prefix + ".events");
+    filenames.push_back(file_prefix + ".stats");
 
     typedef boost::shared_ptr<ofstream> ofstream_ptr;
     vector<ofstream_ptr> outfiles(filenames.size());
@@ -569,6 +595,7 @@ main(int argc, char *argv[])
     print_sigma(*outfiles[2], stree);
     print_gamma(*outfiles[3], stree);
     print_events(*outfiles[4], stree);
+    print_stats(*outfiles[5], stats);
 
     return EXIT_SUCCESS;
 }
@@ -696,7 +723,8 @@ genes_in_all_species(const Tree_type &stree)
 void
 advance_process(double time,
                 const vector<vid_t> &slice, 
-                vector<Node_ptr> &cur_genes)
+                vector<Node_ptr> &cur_genes,
+                Stats &stats)
 {
     while (!cur_genes.empty())
         {
@@ -720,6 +748,9 @@ advance_process(double time,
                     (*i)->edge_time += time_used;
                 }
 
+            /* update the stats with TOTAL time */
+            stats.total_time += time_used * cur_genes.size();
+
             /* if nothing happened during remaining time, then end. */
             time -= time_used;
             if (time <= 0)
@@ -733,6 +764,8 @@ advance_process(double time,
             double event = g_rng_d();
             if (event < delta / (delta + tau + mu))             // duplication
                 {
+                    stats.duplications++;
+
                     Node_ptr g1(new Node(chosen, null, null,
                                          chosen->stree_label,
                                          Node::none, 0.0, false));
@@ -751,6 +784,8 @@ advance_process(double time,
                     
                     if (slice.size() > 1)
                         {
+                            stats.transfers++;
+
                             /* Choose which trunk to transfer to. */
                             unsigned transfer_trunk_idx
                                 = g_rng_ui(slice.size() - 1);
@@ -773,6 +808,7 @@ advance_process(double time,
                 }
             else                                                // loss
                 {
+                    stats.losses++;
                     /* If only one gene remaining, process stops. */
                     if (cur_genes.size() == 1)
                         {
@@ -812,7 +848,8 @@ void
 speciate(const Tree_type       &stree,
          vector<vid_t>         &slice,
          unsigned               slice_idx,
-         vector<Node_ptr>      &cur_genes)
+         vector<Node_ptr>      &cur_genes,
+         Stats                 &stats)
 {
     /* Replace speciating vertex in slice with its children. */
     vid_t cur_snode = slice[slice_idx];
@@ -826,6 +863,8 @@ speciate(const Tree_type       &stree,
         {
             if (cur_genes[i]->stree_label != cur_snode)
                 continue;
+
+            stats.speciations++;
 
             Node_ptr cur_gene = cur_genes[i];
             Node_ptr g1(new Node(cur_gene, null, null,
@@ -842,6 +881,7 @@ speciate(const Tree_type       &stree,
         }
 }
 
+
 void
 print_arguments(ostream &out, int argc, char *argv[])
 {
@@ -852,6 +892,7 @@ print_arguments(ostream &out, int argc, char *argv[])
     out << argv[argc - 1] << "\n";
     out << "seed: " << seed << "\n";
 }
+
 
 void
 print_gtree(ostream &out, const Tree_type &stree)
@@ -970,6 +1011,22 @@ print_events(ostream &out, const Tree_type &stree)
     out << "\n";
 }
 
+
+void
+print_stats(ostream &out, const Stats &stats)
+{
+    out << stats.speciations << "\tspeciation event"
+        << (stats.speciations == 1 ? "" : "s") << "\n";
+    out << stats.duplications << "\tduplication event"
+        << (stats.duplications == 1 ? "" : "s") << "\n";
+    out << stats.transfers << "\ttransfer event"
+        << (stats.transfers == 1 ? "" : "s") << "\n";
+    out << stats.losses << "\tloss event"
+        << (stats.losses == 1 ? "" : "s") << "\n";
+    out << stats.total_time << setprecision(TIME_PRECISION)
+        << "\ttotal unpruned gene tree time\n";
+}
+
         
 void
 postorder_gtree(vector<Node_ptr> &gtree_postorder)
@@ -977,6 +1034,7 @@ postorder_gtree(vector<Node_ptr> &gtree_postorder)
     gtree_postorder.clear();
     postorder_gtree_r(gtree_root, gtree_postorder);
 }
+
 
 void
 postorder_gtree_r(Node_ptr n, vector<Node_ptr> &gtree_postorder)
@@ -988,6 +1046,7 @@ postorder_gtree_r(Node_ptr n, vector<Node_ptr> &gtree_postorder)
         }
     gtree_postorder.push_back(n);
 }
+
 
 void
 print_gtree_r(ostream &out,
