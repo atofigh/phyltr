@@ -1,3 +1,8 @@
+New in 1.1:
+
+    * phyltr-gen-gtree now outputs a .stats file with statistics about
+      the gene tree evolution process
+
 New in 1.0:
 
     * First release of PhylTr

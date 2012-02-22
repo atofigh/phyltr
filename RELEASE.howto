@@ -12,5 +12,7 @@ release. This file should not be included in releases.
 4. update NEWS and README
 5. make sure all source files have the same license header
 6. update this RELEASE.howto
-7. create and test release package using "make distcheck"
+7. create and test release package using "make distcheck".
+   You can set DISTCHECK_CONFIGURE_FLAGS if you need to pass
+   configure flags to "make distcheck".
 8. tag the release
